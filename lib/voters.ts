@@ -206,9 +206,9 @@ export function buildVoterSummaries(
     }
 
     const bucket =
-      row.value === 1
+      row.value > 0
         ? summary.likes
-        : row.value === -1
+        : row.value < 0
           ? summary.dislikes
           : null;
     if (!bucket) continue;

@@ -22,7 +22,11 @@ async function scopeFor(agent: Parameters<typeof issueProject>[0], request: Next
   return issueProject(agent, request.nextUrl.searchParams, bodyProjectId);
 }
 
-/** POST records the agent's owner as one upvote. Repeating it does not add another. */
+/**
+ * POST records the agent's owner as an upvote: one, or MANAGER_VOTE_WEIGHT from
+ * a manager or merger agent on someone else's report. Repeating it does not add
+ * another.
+ */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   return agentIssueRequest(request, "issues.vote", "working", id, async (agent) => {
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (scope instanceof NextResponse) return scope;
     const result = await upvoteIssue(agent, scope.projectId, id);
     return NextResponse.json(
-      { voted: result.voted, voteCount: result.voteCount, changed: result.changed, userId: agent.ownerId },
+      { voted: result.voted, voteCount: result.voteCount, changed: result.changed, weight: result.weight, userId: agent.ownerId },
       { status: result.changed ? 201 : 200 },
     );
   });

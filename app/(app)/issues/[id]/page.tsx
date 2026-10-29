@@ -95,6 +95,7 @@ import { AgentResolvedNotice } from "@/components/agent-resolved-notice";
 import { issueStageLabels } from "@/lib/issue-stage";
 import { ReviewStatusBadge } from "@/components/review-status-badge";
 import { SubmissionEvidence } from "@/components/submission-evidence";
+import { voteDirection } from "@/lib/voting";
 import {
   issueChipBaseClass,
   issueSeverityChipClass,
@@ -729,7 +730,7 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
     });
   const userVote =
     Array.isArray(bug.votes) && bug.votes.length > 0
-      ? (bug.votes[0].value ?? 1)
+      ? voteDirection(bug.votes[0].value ?? 1)
       : 0;
   const commentTree = buildCommentTree(comments.comments);
   // #1446: the stage the page opens on, and what each stage holds.

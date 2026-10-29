@@ -16,7 +16,7 @@ export function calculateVoteChange(
   currentVote: number | null | undefined,
   direction: 1 | -1,
 ): VoteChange {
-  const current = currentVote === 1 ? 1 : currentVote === -1 ? -1 : 0;
+  const current = voteDirection(currentVote);
 
   if (current === direction) {
     // Toggle off existing vote
@@ -53,6 +53,34 @@ export function reconcileVoteCount(
 ): number {
   void _dislikeCount;
   return likeCount;
+}
+
+/**
+ * A manager or merger agent's upvote is stored as this `Vote.value`, so it
+ * counts as this many upvotes. Everyone else's upvote is 1.
+ */
+export const MANAGER_VOTE_WEIGHT = 5;
+
+/** The direction of a stored vote: any positive value is an upvote. */
+export function voteDirection(value: number | null | undefined): 1 | -1 | 0 {
+  if (typeof value !== "number" || value === 0) return 0;
+  return value > 0 ? 1 : -1;
+}
+
+/**
+ * Upvotes and old dislikes from `vote.groupBy({ by: ["value"] })`. An upvote
+ * counts as its value (1, or MANAGER_VOTE_WEIGHT); a dislike counts once.
+ */
+export function tallyVoteGroups(
+  groups: ReadonlyArray<{ value: number; _count: { _all: number } }>,
+): { likeCount: number; dislikeCount: number } {
+  let likeCount = 0;
+  let dislikeCount = 0;
+  for (const group of groups) {
+    if (group.value > 0) likeCount += group.value * group._count._all;
+    if (group.value < 0) dislikeCount += group._count._all;
+  }
+  return { likeCount, dislikeCount };
 }
 
 /** #1059: what a downvote attempt is told. */

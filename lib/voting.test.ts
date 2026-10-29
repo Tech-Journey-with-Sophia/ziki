@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   calculateVoteChange,
   isValidVoteDirection,
+  MANAGER_VOTE_WEIGHT,
   reconcileVoteCount,
+  tallyVoteGroups,
+  voteDirection,
 } from "./voting";
 
 describe("isValidVoteDirection", () => {
@@ -110,5 +113,27 @@ describe("reconcileVoteCount (#362)", () => {
 
     // Guard: createBugAction initializes voteCount explicitly
     expect(source).toContain("voteCount: 0");
+  });
+});
+
+describe("manager-weighted upvotes", () => {
+  it("reads any positive value as an upvote", () => {
+    expect(voteDirection(MANAGER_VOTE_WEIGHT)).toBe(1);
+    expect(voteDirection(1)).toBe(1);
+    expect(voteDirection(-1)).toBe(-1);
+    expect(voteDirection(0)).toBe(0);
+    expect(voteDirection(null)).toBe(0);
+  });
+
+  it("counts an upvote as its value and a dislike once", () => {
+    expect(tallyVoteGroups([
+      { value: 1, _count: { _all: 3 } },
+      { value: MANAGER_VOTE_WEIGHT, _count: { _all: 2 } },
+      { value: -1, _count: { _all: 4 } },
+    ])).toEqual({ likeCount: 3 + 2 * MANAGER_VOTE_WEIGHT, dislikeCount: 4 });
+  });
+
+  it("toggles a person's manager-weighted upvote off when they click upvote", () => {
+    expect(calculateVoteChange(MANAGER_VOTE_WEIGHT, 1)).toMatchObject({ nextVote: 0 });
   });
 });

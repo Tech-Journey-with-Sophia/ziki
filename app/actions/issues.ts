@@ -47,6 +47,7 @@ import {
   DOWNVOTES_REMOVED_MESSAGE,
   isValidVoteDirection,
   reconcileVoteCount,
+  tallyVoteGroups,
 } from "@/lib/voting";
 import {
   canDeleteTicket,
@@ -1663,13 +1664,7 @@ export async function toggleVoteAction(
       _count: { _all: true },
     });
 
-    let likeCount = 0;
-    let dislikeCount = 0;
-    for (const c of voteCounts) {
-      if (c.value === 1) likeCount = c._count._all;
-      if (c.value === -1) dislikeCount = c._count._all;
-    }
-
+    const { likeCount, dislikeCount } = tallyVoteGroups(voteCounts);
     const voteCount = reconcileVoteCount(likeCount, dislikeCount);
 
     await tx.bug.update({
@@ -1810,13 +1805,7 @@ export async function restoreBugAction(bugId: string): Promise<ActionResult> {
           _count: { _all: true },
         });
 
-        let likeCount = 0;
-        let dislikeCount = 0;
-        for (const c of voteCounts) {
-          if (c.value === 1) likeCount = c._count._all;
-          if (c.value === -1) dislikeCount = c._count._all;
-        }
-
+        const { likeCount, dislikeCount } = tallyVoteGroups(voteCounts);
         voteCount = reconcileVoteCount(likeCount, dislikeCount);
       }
 

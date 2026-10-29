@@ -32,16 +32,16 @@ export async function fetchVoterSummaries(
         u."image",
         v."createdAt",
         ROW_NUMBER() OVER (
-          PARTITION BY v."bugId", v."value"
+          PARTITION BY v."bugId", SIGN(v."value")
           ORDER BY v."createdAt" ASC
         ) AS rn,
         COUNT(*) OVER (
-          PARTITION BY v."bugId", v."value"
+          PARTITION BY v."bugId", SIGN(v."value")
         ) AS total_count
       FROM "Vote" v
       JOIN "User" u ON u."id" = v."userId"
       WHERE v."bugId" IN (${Prisma.join(uniqueIds)})
-        AND v."value" IN (1, -1)
+        AND v."value" <> 0
     )
     SELECT
       "bugId",

@@ -90,6 +90,7 @@ import { logLoadFailure } from "@/lib/load-error";
 import { AREA_PARAM, parseProjectAreaFilter, projectAreaFilterWhere } from "@/lib/project-area-filter";
 import { openIssueStages, parseIssueStageView, type IssueStage } from "@/lib/issue-stage";
 import { isUnstructuredDraft } from "@/lib/ideas";
+import { voteDirection } from "@/lib/voting";
 import { issuePath } from "@/lib/issue-ref";
 import { PROJECT_ALL_PARAM, showsAllProjects } from "@/lib/issue-list-filters";
 
@@ -1144,7 +1145,7 @@ export default async function BugsPage({
                   {bugs.map((bug, index) => {
                     const userVote =
                       Array.isArray(bug.votes) && bug.votes.length > 0
-                        ? (bug.votes[0].value ?? 1)
+                        ? voteDirection(bug.votes[0].value ?? 1)
                         : 0;
                     const voterSummary =
                       voterSummaries.get(bug.id) ?? createEmptyVoterSummary();

@@ -2,9 +2,10 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AgentContext } from "@/lib/agents/require-agent";
+import { hasLevel } from "@/lib/agents/levels";
 import { IssueApiError } from "@/lib/agent-api/issues";
 import { publish } from "@/lib/agent-api/events";
-import { reconcileVoteCount } from "@/lib/voting";
+import { MANAGER_VOTE_WEIGHT, reconcileVoteCount, tallyVoteGroups } from "@/lib/voting";
 
 const id = z.string().trim().min(1).max(191);
 
@@ -18,11 +19,15 @@ export type AgentVoteResult = {
   voteCount: number;
   /** True when this call changed the owner's vote. A repeat is false. */
   changed: boolean;
+  /** How many upvotes the owner's vote counts as; 0 when there is none. */
+  weight: number;
 };
 
-async function lockedIssue(tx: Tx, caller: AgentContext, projectId: string, bugId: string) {
-  const locked = await tx.$queryRaw<{ id: string }[]>`
-    SELECT "id" FROM "Bug"
+type LockedIssue = { id: string; reporterId?: string | null; beneficiaryUserId?: string | null };
+
+async function lockedIssue(tx: Tx, caller: AgentContext, projectId: string, bugId: string): Promise<LockedIssue> {
+  const locked = await tx.$queryRaw<LockedIssue[]>`
+    SELECT "id", "reporterId", "beneficiaryUserId" FROM "Bug"
     WHERE "id" = ${bugId}
       AND "tenantId" = ${caller.tenantId}
       AND "projectId" = ${projectId}
@@ -30,6 +35,18 @@ async function lockedIssue(tx: Tx, caller: AgentContext, projectId: string, bugI
     FOR NO KEY UPDATE
   `;
   if (!locked.length) throw new IssueApiError(404, "Issue not found in this project.");
+  return locked[0];
+}
+
+/**
+ * A manager or merger agent's upvote counts as MANAGER_VOTE_WEIGHT, except on
+ * its owner's own report: independence is by owner, so nobody can push their
+ * own idea past the upvote gate.
+ */
+export function upvoteWeight(caller: Pick<AgentContext, "level" | "ownerId">, issue: LockedIssue): number {
+  if (!hasLevel(caller.level, "manager")) return 1;
+  if (issue.reporterId === caller.ownerId || issue.beneficiaryUserId === caller.ownerId) return 1;
+  return MANAGER_VOTE_WEIGHT;
 }
 
 async function recount(tx: Tx, bugId: string): Promise<number> {
@@ -38,21 +55,17 @@ async function recount(tx: Tx, bugId: string): Promise<number> {
     where: { bugId },
     _count: { _all: true },
   });
-  let likes = 0;
-  let dislikes = 0;
-  for (const group of groups) {
-    if (group.value === 1) likes = group._count._all;
-    if (group.value === -1) dislikes = group._count._all;
-  }
-  const voteCount = reconcileVoteCount(likes, dislikes);
+  const { likeCount, dislikeCount } = tallyVoteGroups(groups);
+  const voteCount = reconcileVoteCount(likeCount, dislikeCount);
   await tx.bug.update({ where: { id: bugId }, data: { voteCount } });
   return voteCount;
 }
 
 /**
  * Records the agent's owner as an upvote. One person, one vote: another agent
- * of the same owner does not add a second upvote. Repeating the call leaves
- * the count unchanged.
+ * of the same owner does not add a second upvote. A manager agent's upvote
+ * counts as MANAGER_VOTE_WEIGHT (see `upvoteWeight`). Repeating the call
+ * leaves the count unchanged.
  */
 export async function upvoteIssue(
   caller: AgentContext,
@@ -60,18 +73,19 @@ export async function upvoteIssue(
   bugId: string,
 ): Promise<AgentVoteResult> {
   return prisma.$transaction(async (tx) => {
-    await lockedIssue(tx, caller, projectId, bugId);
+    const issue = await lockedIssue(tx, caller, projectId, bugId);
+    const weight = upvoteWeight(caller, issue);
     const existing = await tx.vote.findUnique({
       where: { userId_bugId: { userId: caller.ownerId, bugId } },
     });
-    if (existing?.value === 1) {
-      const issue = await tx.bug.findUnique({ where: { id: bugId }, select: { voteCount: true } });
-      return { voted: true, voteCount: issue?.voteCount ?? 0, changed: false };
+    if (existing?.value === weight) {
+      const current = await tx.bug.findUnique({ where: { id: bugId }, select: { voteCount: true } });
+      return { voted: true, voteCount: current?.voteCount ?? 0, changed: false, weight };
     }
     if (existing) {
-      await tx.vote.update({ where: { id: existing.id }, data: { value: 1 } });
+      await tx.vote.update({ where: { id: existing.id }, data: { value: weight } });
     } else {
-      await tx.vote.create({ data: { userId: caller.ownerId, bugId, value: 1 } });
+      await tx.vote.create({ data: { userId: caller.ownerId, bugId, value: weight } });
     }
     const voteCount = await recount(tx, bugId);
     await publish(tx, {
@@ -79,9 +93,9 @@ export async function upvoteIssue(
       type: "issue.voted",
       actorAgentId: caller.agentId,
       bugId,
-      payload: { issueId: bugId, projectId, userId: caller.ownerId, voteCount, voted: true },
+      payload: { issueId: bugId, projectId, userId: caller.ownerId, voteCount, voted: true, weight },
     });
-    return { voted: true, voteCount, changed: true };
+    return { voted: true, voteCount, changed: true, weight };
   });
 }
 
@@ -98,7 +112,7 @@ export async function removeUpvote(
     });
     if (!existing) {
       const issue = await tx.bug.findUnique({ where: { id: bugId }, select: { voteCount: true } });
-      return { voted: false, voteCount: issue?.voteCount ?? 0, changed: false };
+      return { voted: false, voteCount: issue?.voteCount ?? 0, changed: false, weight: 0 };
     }
     await tx.vote.delete({ where: { id: existing.id } });
     const voteCount = await recount(tx, bugId);
@@ -109,6 +123,6 @@ export async function removeUpvote(
       bugId,
       payload: { issueId: bugId, projectId, userId: caller.ownerId, voteCount, voted: false },
     });
-    return { voted: false, voteCount, changed: true };
+    return { voted: false, voteCount, changed: true, weight: 0 };
   });
 }
