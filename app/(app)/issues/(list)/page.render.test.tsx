@@ -168,12 +168,13 @@ describe("issue list layout", () => {
 
     const nav = html.match(/<nav aria-label="Platforms"[\s\S]*?<\/nav>/)?.[0] ?? "";
     const tabs = [...nav.matchAll(/<a [^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]+)<span[^>]*>(\d+)<\/span><\/a>/g)].map((m) => `${m[1].trim()} ${m[2]}`);
-    // Active platforms only (not the inactive Desktop), and Resolved tab with count.
-    expect(tabs).toEqual(["All 7", "Web 4", "Mobile 2", "Resolved 1"]);
+    // Active platforms only (not the inactive Desktop), Ideas tab, and Resolved tab with count.
+    expect(tabs).toEqual(["All 7", "Web 4", "Mobile 2", "Ideas 1", "Resolved 1"]);
     expect(nav).toMatch(/aria-current="page"[^>]*href="\/issues\?q=login&amp;platform=cat-web"/);
     // Choosing a tab keeps the search, drops paging, and swaps the platform.
     expect(nav).toContain('href="/issues?q=login&amp;platform=cat-mobile"');
     expect(nav).toContain('href="/issues?q=login"');
+    expect(nav).toContain('href="/issues?q=login&amp;stage=ideas"');
     expect(nav).toContain('href="/issues?q=login&amp;status=resolved"');
     expect(nav).not.toContain("No platform");
 
@@ -253,5 +254,27 @@ describe("issue list layout", () => {
   it("dates rows by when they were opened when sorted by newest (#1061)", async () => {
     const html = await renderList({ sort: "newest" });
     expect(html).toMatch(/<time dateTime="2026-10-01T10:00:00.000Z" title="Opened /);
+  });
+
+  it("excludes ideas from the default view and All/platform tabs (#420)", async () => {
+    await renderList();
+    const listQuery = findMany.mock.calls.at(-1)![0];
+    // In default view, bug-1 (reported) is excluded from main list query
+    expect(listQuery.where.id).toEqual({ notIn: ["bug-1"] });
+  });
+
+  it("filters to ideas when stage=ideas is requested (#420)", async () => {
+    const html = await renderList({ stage: "ideas" });
+    const listQuery = findMany.mock.calls.at(-1)![0];
+    expect(listQuery.where.id).toEqual({ in: ["bug-1"] });
+    expect(html).toContain("Hide ideas");
+  });
+
+  it("shows pointer to Ideas view when empty state has ideas (#420)", async () => {
+    findMany.mockResolvedValue([]);
+    count.mockImplementation(async (args: { where?: { OR?: unknown } }) => (args?.where?.OR ? 0 : 5));
+    const html = await renderList({ q: "nonexistent" });
+    expect(html).toContain("awaiting review or upvotes");
+    expect(html).toContain('href="/issues?q=nonexistent&amp;stage=ideas"');
   });
 });
