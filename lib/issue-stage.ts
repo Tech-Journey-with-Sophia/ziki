@@ -7,8 +7,8 @@ import { WORK_READINESS_VOTE_THRESHOLD } from "@/lib/ticket-assignment";
 /** Where an open issue sits before someone starts the work. Not a status. */
 export type IssueStage = "reported" | "confirmed" | "ready";
 
-/** List filters. `ready` is the issue that can be passed on. */
-export type IssueStageView = "reported" | "confirmed" | "ready";
+/** List filters. `ready` is the issue that can be passed on. `ideas` is intake awaiting review or votes. */
+export type IssueStageView = "reported" | "confirmed" | "ready" | "ideas";
 
 export const issueStageLabels: Record<IssueStage, string> = {
   reported: "Reported",
@@ -23,7 +23,7 @@ export const issueStageLabels: Record<IssueStage, string> = {
 export type Intake = "idea" | "issue";
 
 export function parseIssueStageView(raw: string | null | undefined): IssueStageView | null {
-  return raw === "reported" || raw === "confirmed" || raw === "ready" ? raw : null;
+  return raw === "reported" || raw === "confirmed" || raw === "ready" || raw === "ideas" ? raw : null;
 }
 
 export function intakeOf(stage: IssueStage): Intake {

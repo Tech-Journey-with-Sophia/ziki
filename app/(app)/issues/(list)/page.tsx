@@ -311,20 +311,51 @@ export default async function BugsPage({
 
   const stageView = isDeletedView ? null : parseIssueStageView(toSingleQueryParam(params.stage));
   let stages = new Map<string, IssueStage>();
+  let allIdeaIds: string[] = [];
+  let reportedCount = 0;
+  let confirmedCount = 0;
+  let readyCount = 0;
+
   if (!isDeletedView) {
     try {
-      stages = await openIssueStages(prisma, where);
+      const { categoryId: _c, status: _s, ...allOpenWhere } = where;
+      void _c;
+      void _s;
+      stages = await openIssueStages(prisma, allOpenWhere);
     } catch (error) {
       console.error("[bugs] issue stage lookup failed", error);
     }
-    if (stageView) {
+
+    reportedCount = [...stages.values()].filter((stage) => stage === "reported").length;
+    confirmedCount = [...stages.values()].filter((stage) => stage === "confirmed").length;
+    readyCount = [...stages.values()].filter((stage) => stage === "ready").length;
+    allIdeaIds = [...stages.entries()]
+      .filter(([, stage]) => stage === "reported" || stage === "confirmed")
+      .map(([id]) => id);
+
+    const hasSearchQuery = Boolean(qParam?.trim());
+
+    if (stageView === "ideas") {
+      where.id = { in: allIdeaIds };
+      totalCount = allIdeaIds.length;
+    } else if (stageView === "reported" || stageView === "confirmed" || stageView === "ready") {
       const ids = [...stages.entries()].filter(([, stage]) => stage === stageView).map(([id]) => id);
       where.id = { in: ids };
-      try {
-        totalCount = await prisma.bug.count({ where });
-      } catch (error) {
-        console.error("[bugs] stage count failed", error);
-        totalCount = 0;
+      totalCount = ids.length;
+    } else if (!hasSearchQuery) {
+      // #420: Ideas leave the main issues list and live only in the Ideas view.
+      if (allIdeaIds.length > 0) {
+        if (where.id && typeof where.id === "object" && "in" in where.id && Array.isArray((where.id as { in: string[] }).in)) {
+          (where.id as { in: string[] }).in = (where.id as { in: string[] }).in.filter((id) => !allIdeaIds.includes(id));
+          totalCount = (where.id as { in: string[] }).in.length;
+        } else {
+          where.id = { notIn: allIdeaIds };
+          try {
+            totalCount = await prisma.bug.count({ where });
+          } catch {
+            totalCount = Math.max(0, totalCount - allIdeaIds.length);
+          }
+        }
       }
     }
   }
@@ -339,6 +370,11 @@ export default async function BugsPage({
       const liveTabWhere: Prisma.BugWhereInput = {
         ...baseTabWhere,
         status: defaultStatusWhere(false),
+        ...(stageView === "ideas"
+          ? { id: { in: allIdeaIds } }
+          : allIdeaIds.length > 0
+            ? { id: { notIn: allIdeaIds } }
+            : {}),
       };
 
       const [grouped, resolvedCount] = await Promise.all([
@@ -369,6 +405,21 @@ export default async function BugsPage({
             count: counts.get(platform.id) ?? 0,
           })),
           {
+            id: "ideas",
+            name: "Ideas",
+            count: allIdeaIds.length,
+            icon: (
+              <svg
+                className="h-4 w-4 shrink-0 text-amber-500"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M10 2a6 6 0 00-6 6c0 1.887.87 3.57 2.235 4.674a1 1 0 01.365.772V15a1 1 0 001 1h4a1 1 0 001-1v-1.554a1 1 0 01.365-.772A6.002 6.002 0 0016 8a6 6 0 00-6-6zm-1 16a1 1 0 001 1h0a1 1 0 001-1v-1H9v1z" />
+              </svg>
+            ),
+          },
+          {
             id: "resolved",
             name: "Resolved",
             count: resolvedCount,
@@ -398,18 +449,32 @@ export default async function BugsPage({
     for (const [key, value] of Object.entries(params)) {
       if (key === "page" || key === PLATFORM_PARAM) continue;
       if (key === "status" && toSingleQueryParam(value) === "resolved") continue;
+      if (key === "stage" && toSingleQueryParam(value) === "ideas") continue;
       if (key === SHOW_RESOLVED_PARAM) continue;
       const single = toSingleQueryParam(value);
       if (single) next.set(key, single);
     }
     if (id === "resolved") {
       next.set("status", "resolved");
+    } else if (id === "ideas") {
+      next.set("stage", "ideas");
     } else if (id) {
       next.set(PLATFORM_PARAM, id);
     }
     const qs = next.toString();
     return qs ? `/issues?${qs}` : "/issues";
   };
+
+  const ideasHref = (() => {
+    const next = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      const single = toSingleQueryParam(value);
+      if (single && key !== "stage" && key !== "page") next.set(key, single);
+    }
+    if (stageView !== "ideas") next.set("stage", "ideas");
+    const qs = next.toString();
+    return qs ? `/issues?${qs}` : "/issues";
+  })();
 
   // How many resolved/closed issues the default view hides (#1058).
   let hiddenResolved = 0;
@@ -601,9 +666,6 @@ export default async function BugsPage({
     }),
   ).toString();
 
-  const reportedCount = [...stages.values()].filter((stage) => stage === "reported").length;
-  const confirmedCount = [...stages.values()].filter((stage) => stage === "confirmed").length;
-  const readyCount = [...stages.values()].filter((stage) => stage === "ready").length;
   const stageClass: Record<IssueStage, string> = {
     reported: "bg-slate-100 text-slate-700",
     confirmed: "bg-amber-50 text-amber-900",
@@ -680,7 +742,7 @@ export default async function BugsPage({
         {isFirstRun ? null : (
           <PlatformTabs
             tabs={platformTabs}
-            current={isResolvedView ? "resolved" : selectedPlatform}
+            current={isResolvedView ? "resolved" : stageView === "ideas" ? "ideas" : selectedPlatform}
             hrefFor={platformHref}
           />
         )}
@@ -705,6 +767,14 @@ export default async function BugsPage({
             <p role="status" aria-live="polite">
               {resultCountText(totalCount, statusWhere !== undefined ? statusParam ?? null : null)} · sorted by{" "}
               {bugSortDescriptions[currentSort]}
+              {allIdeaIds.length > 0 && !isDeletedView ? (
+                <>
+                  {" · "}
+                  <Link href={ideasHref} className="font-medium text-amber-700 hover:underline print:hidden">
+                    {stageView === "ideas" ? "Hide ideas" : `Show ${allIdeaIds.length} idea${allIdeaIds.length === 1 ? "" : "s"}`}
+                  </Link>
+                </>
+              ) : null}
               {hiddenResolved > 0 || (showResolved && statusWhere === undefined && !isDeletedView) ? (
                 <>
                   {" · "}
@@ -761,6 +831,14 @@ export default async function BugsPage({
                   ? "You watch issues you report, are assigned to or comment on, and any you choose to watch from the issue page."
                   : "Try clearing filters, or report it with New issue at the top."}
               </p>
+              {allIdeaIds.length > 0 && stageView !== "ideas" ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  There {allIdeaIds.length === 1 ? "is" : "are"} {allIdeaIds.length} {allIdeaIds.length === 1 ? "idea" : "ideas"} awaiting review or upvotes.{" "}
+                  <Link href={ideasHref} className="font-medium underline hover:text-amber-900">
+                    View {allIdeaIds.length === 1 ? "idea" : "ideas"} →
+                  </Link>
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <Link
                   href="/issues"
