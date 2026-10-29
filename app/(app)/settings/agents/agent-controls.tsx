@@ -10,6 +10,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { copyText } from "@/lib/clipboard";
 import { AGENT_LEVEL_LABELS } from "@/lib/agents/levels";
+import { scopesForLevel } from "@/lib/agents/permissions";
 import { LocalTime } from "@/components/local-time";
 import type { AgentProjectChoice } from "./create-agent-form";
 
@@ -434,6 +435,26 @@ export function AgentControls({
           <Button type="button" variant="secondary" disabled={pending || !areaPreferencesChanged} onClick={saveAreaPreferences}>
             {pending ? "Saving…" : "Save area preferences"}
           </Button>
+        </div>
+      </details>
+      <details className="w-full text-left sm:max-w-md">
+        <summary className="cursor-pointer text-xs font-medium text-teal-800 hover:underline">
+          Granted permissions &amp; scopes
+        </summary>
+        <div className="mt-2 space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs text-slate-600">
+            Granular API permission scopes granted to this agent:
+          </p>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {scopesForLevel(level).map((scope) => (
+              <span
+                key={scope}
+                className="inline-flex items-center rounded bg-slate-200/80 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-800"
+              >
+                {scope}
+              </span>
+            ))}
+          </div>
         </div>
       </details>
     </div>
