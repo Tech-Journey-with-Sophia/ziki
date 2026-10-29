@@ -58,9 +58,10 @@ export async function GET(
 }
 
 /**
- * Delete an attachment (#658).
- * Allowed for the uploader (e.g. form abandoned or user removed file),
- * or an admin of the tenant where the parent issue/comment/proposal lives.
+ * Delete an attachment (#658, #564).
+ * Allowed for the uploader (e.g. form abandoned or user removed file) while
+ * they still belong to the workspace that holds it, or an admin of the tenant
+ * where the parent issue/comment/proposal lives.
  */
 export async function DELETE(
   _req: NextRequest,
@@ -87,17 +88,33 @@ export async function DELETE(
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
-  let allowed = attachment.uploaderId === user.id;
+  const parentTenantId =
+    attachment.bug?.tenantId ??
+    attachment.comment?.bug?.tenantId ??
+    attachment.redesignProposal?.tenantId ??
+    null;
 
-  if (!allowed) {
-    const tenantId =
-      attachment.bug?.tenantId ??
-      attachment.comment?.bug?.tenantId ??
-      attachment.redesignProposal?.tenantId;
-    if (tenantId) {
-      const access = await tenantAccessFor(user.id, tenantId, user.role);
-      allowed = access.admin;
+  let allowed = false;
+
+  if (attachment.uploaderId === user.id) {
+    // An unattached upload is nobody else's business, so its uploader may
+    // always drop it. Once it hangs off an issue, comment or proposal it
+    // belongs to that workspace as well: a member who has since been removed
+    // must not be able to destroy evidence they can no longer read (#564).
+    if (!parentTenantId) {
+      allowed = true;
+    } else {
+      const membership = await prisma.membership.findUnique({
+        where: { tenantId_userId: { tenantId: parentTenantId, userId: user.id } },
+        select: { userId: true },
+      });
+      allowed = Boolean(membership);
     }
+  }
+
+  if (!allowed && parentTenantId) {
+    const access = await tenantAccessFor(user.id, parentTenantId, user.role);
+    allowed = access.admin;
   }
 
   if (!allowed) {

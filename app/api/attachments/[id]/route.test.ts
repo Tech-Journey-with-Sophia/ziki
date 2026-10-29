@@ -10,7 +10,7 @@ const tenantAccessFor = vi.hoisted(() =>
     tenantId: "tenant-ziki",
     tenantName: "Ziki",
     tenantSlug: "ziki",
-    membershipRole: "member" as "owner" | "admin" | "member",
+    membershipRole: "member" as "owner" | "admin" | "member" | null,
     admin: false,
   })),
 );
@@ -202,6 +202,81 @@ describe("DELETE /api/attachments/[id] (#658)", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true });
     expect(attachmentDelete).toHaveBeenCalledWith({ where: { id: "att-1" } });
+  });
+
+  it("refuses an uploader who is no longer a member of the workspace (#564)", async () => {
+    findUnique.mockResolvedValue({
+      id: "att-3",
+      uploaderId: "user-1",
+      bugId: "bug-1",
+      commentId: null,
+      redesignProposalId: null,
+      bug: { tenantId: "tenant-ziki" },
+      comment: null,
+      redesignProposal: null,
+    });
+    membershipFindUnique.mockResolvedValue(null);
+    tenantAccessFor.mockResolvedValue({
+      tenantId: "tenant-ziki",
+      tenantName: "Ziki",
+      tenantSlug: "ziki",
+      membershipRole: null,
+      admin: false,
+    });
+
+    const res = await makeDeleteRequest("att-3");
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
+    expect(membershipFindUnique).toHaveBeenCalledWith({
+      where: { tenantId_userId: { tenantId: "tenant-ziki", userId: "user-1" } },
+      select: { userId: true },
+    });
+    expect(attachmentDelete).not.toHaveBeenCalled();
+  });
+
+  it("lets an uploader who is still a member delete their attachment (#564)", async () => {
+    findUnique.mockResolvedValue({
+      id: "att-4",
+      uploaderId: "user-1",
+      bugId: "bug-1",
+      commentId: null,
+      redesignProposalId: null,
+      bug: { tenantId: "tenant-ziki" },
+      comment: null,
+      redesignProposal: null,
+    });
+    membershipFindUnique.mockResolvedValue({ userId: "user-1" });
+    attachmentDelete.mockResolvedValue({ id: "att-4" });
+
+    const res = await makeDeleteRequest("att-4");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true });
+    expect(attachmentDelete).toHaveBeenCalledWith({ where: { id: "att-4" } });
+  });
+
+  it("checks the workspace behind a comment attachment (#564)", async () => {
+    findUnique.mockResolvedValue({
+      id: "att-5",
+      uploaderId: "user-1",
+      bugId: null,
+      commentId: "comment-1",
+      redesignProposalId: null,
+      bug: null,
+      comment: { bug: { tenantId: "tenant-ziki" } },
+      redesignProposal: null,
+    });
+    membershipFindUnique.mockResolvedValue(null);
+    tenantAccessFor.mockResolvedValue({
+      tenantId: "tenant-ziki",
+      tenantName: "Ziki",
+      tenantSlug: "ziki",
+      membershipRole: null,
+      admin: false,
+    });
+
+    const res = await makeDeleteRequest("att-5");
+    expect(res.status).toBe(403);
+    expect(attachmentDelete).not.toHaveBeenCalled();
   });
 
   it("returns 403 when a non-uploader non-admin user tries to delete an attachment", async () => {
