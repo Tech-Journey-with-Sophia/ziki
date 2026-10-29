@@ -87,6 +87,9 @@ export function hasScope(
   agent: { level: AgentLevel; scopes?: readonly string[] | null },
   scope: AgentScope,
 ): boolean {
+  if (!(AGENT_SCOPES as readonly string[]).includes(scope)) {
+    return true;
+  }
   const granted = agent.scopes ? agent.scopes : scopesForLevel(agent.level);
   return granted.includes(scope);
 }
@@ -99,8 +102,9 @@ export function requireScope(
   agent: { level: AgentLevel; scopes?: readonly string[] | null },
   actionOrScope: string,
 ): void {
-  const required = (ACTION_REQUIRED_SCOPES[actionOrScope] as AgentScope) || (actionOrScope as AgentScope);
-  if (!required) return; // If action is unmapped, default to level check
+  const isDirectScope = (AGENT_SCOPES as readonly string[]).includes(actionOrScope);
+  const required = ACTION_REQUIRED_SCOPES[actionOrScope] ?? (isDirectScope ? (actionOrScope as AgentScope) : undefined);
+  if (!required) return; // If action is unmapped and not an explicit known scope, level check suffices
   if (!hasScope(agent, required)) {
     throw new AgentScopeError(required);
   }
