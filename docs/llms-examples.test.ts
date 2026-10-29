@@ -14,25 +14,45 @@ import { validationBodySchema } from "@/lib/agent-api/validation";
  * The request bodies in llms.txt must be ones the routes accept (#555).
  * Each documented example is parsed with the same zod schema the route uses.
  */
-const doc = readFileSync("docs/ziki-for-agents.md", "utf8");
+
+/**
+ * Git checks the reference out with CRLF on Windows, but the parser below
+ * searches for exact `\n` boundaries, so the text is normalised to LF before
+ * anything reads it (#657). Text that is already LF is returned unchanged.
+ */
+function withLfNewlines(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
+const doc = withLfNewlines(readFileSync("docs/ziki-for-agents.md", "utf8"));
 
 /** The text of one `### METHOD /path` section of the reference. */
-function section(heading: string): string {
-  const start = doc.indexOf(`\n### ${heading}\n`);
+function sectionOf(text: string, heading: string): string {
+  const start = text.indexOf(`\n### ${heading}\n`);
   expect(start, `missing section "${heading}"`).toBeGreaterThan(-1);
-  const rest = doc.slice(start + 1);
+  const rest = text.slice(start + 1);
   const next = rest.slice(4).search(/\n(### |## )/);
   return next === -1 ? rest : rest.slice(0, next + 4);
 }
 
+/** One section of the reference, as loaded above. */
+function section(heading: string): string {
+  return sectionOf(doc, heading);
+}
+
 /** The JSON block that follows **Request Body:** (or **Request:**) in a section, without `// comments`. */
-function requestBody(heading: string): unknown {
-  const text = section(heading);
-  const marker = Math.max(text.indexOf("**Request Body:**"), text.indexOf("**Request:**"));
+function requestBodyOf(text: string, heading: string): unknown {
+  const body = sectionOf(text, heading);
+  const marker = Math.max(body.indexOf("**Request Body:**"), body.indexOf("**Request:**"));
   expect(marker, `"${heading}" has no Request Body`).toBeGreaterThan(-1);
-  const block = /```json\n([\s\S]*?)```/.exec(text.slice(marker));
+  const block = /```json\n([\s\S]*?)```/.exec(body.slice(marker));
   expect(block, `"${heading}" has no JSON example`).not.toBeNull();
   return JSON.parse(block![1].replace(/\s\/\/[^\n]*/g, ""));
+}
+
+/** The JSON example in one documented request body. */
+function requestBody(heading: string): unknown {
+  return requestBodyOf(doc, heading);
 }
 
 const EXAMPLES: Array<[string, z.ZodType]> = [
@@ -85,5 +105,20 @@ describe("llms.txt request examples are accepted by the routes (#555)", () => {
     const results = section("POST /api/v1/issues/{id}/test-results");
     expect(results).toContain("goodToMerge");
     expect(results).not.toMatch(/"passed"|"artifacts"/);
+  });
+
+  it("parses a CRLF checkout the same as an LF one (#657)", () => {
+    const crlf = doc.replace(/\n/g, "\r\n");
+
+    // The raw Windows text breaks the exact-LF heading search...
+    expect(crlf.indexOf("\n### POST /api/v1/issues\n")).toBe(-1);
+    // ...so the reference is normalised before anything parses it.
+    expect(withLfNewlines(crlf)).toBe(doc);
+    expect(sectionOf(withLfNewlines(crlf), "POST /api/v1/issues")).toBe(
+      section("POST /api/v1/issues"),
+    );
+    expect(requestBodyOf(withLfNewlines(crlf), "POST /api/v1/issues")).toEqual(
+      requestBody("POST /api/v1/issues"),
+    );
   });
 });
