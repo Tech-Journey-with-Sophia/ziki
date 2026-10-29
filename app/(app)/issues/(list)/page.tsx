@@ -316,7 +316,7 @@ export default async function BugsPage({
   let confirmedCount = 0;
   let readyCount = 0;
 
-  if (!isDeletedView && totalCount > 0) {
+  if (!isDeletedView) {
     try {
       const { categoryId: _c, status: _s, ...allOpenWhere } = where;
       void _c;
@@ -333,6 +333,8 @@ export default async function BugsPage({
       .filter(([, stage]) => stage === "reported" || stage === "confirmed")
       .map(([id]) => id);
 
+    const hasSearchQuery = Boolean(qParam?.trim());
+
     if (stageView === "ideas") {
       where.id = { in: allIdeaIds };
       totalCount = allIdeaIds.length;
@@ -340,7 +342,7 @@ export default async function BugsPage({
       const ids = [...stages.entries()].filter(([, stage]) => stage === stageView).map(([id]) => id);
       where.id = { in: ids };
       totalCount = ids.length;
-    } else {
+    } else if (!hasSearchQuery) {
       // #420: Ideas leave the main issues list and live only in the Ideas view.
       if (allIdeaIds.length > 0) {
         if (where.id && typeof where.id === "object" && "in" in where.id && Array.isArray((where.id as { in: string[] }).in)) {
