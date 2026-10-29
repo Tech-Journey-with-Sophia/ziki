@@ -21,11 +21,15 @@ type SearchParams = Promise<{
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
+export default async function SettingsPage(props: {
+  searchParams?: SearchParams;
+}): Promise<React.JSX.Element>;
+export default async function SettingsPage(): Promise<React.JSX.Element>;
 export default async function SettingsPage({
   searchParams,
 }: {
   searchParams?: SearchParams;
-} = {}) {
+} = {}): Promise<React.JSX.Element> {
   const user = await requireUser();
   const params = searchParams ? await searchParams : {};
   const activeTab = (one(params.tab) ?? "all").toLowerCase();
