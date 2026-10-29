@@ -11,7 +11,7 @@ export const maxDuration = 60;
  * every ready issue in a project. Dispatcher level only.
  */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "dispatcher.dispatch", "dispatcher", null, async (agent) => {
+  return agentIssueRequest(request, "dispatcher.dispatch", "manager", null, async (agent) => {
     const parsed = dispatcherConfigSchema.safeParse(await issueJson(request));
     if (!parsed.success) return NextResponse.json({ error: "Invalid dispatch request." }, { status: 400 });
     if (!request.nextUrl.searchParams.get("projectId") && !parsed.data.projectId) {

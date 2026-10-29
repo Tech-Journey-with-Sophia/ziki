@@ -31,7 +31,7 @@ const key = () => ({
     name: "Agent",
     ownerUserId: "owner",
     tenantId: "tenant-a",
-    level: "contributor",
+    level: "working",
     burst: false,
     revokedAt: null,
     owner: { memberships: [{ tenantId: "tenant-a" }] },

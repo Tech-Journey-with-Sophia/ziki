@@ -11,7 +11,7 @@ const agent = {
   name: "Ada's Claude",
   ownerId: "ada",
   tenantId: "tenant_zedu",
-  level: "observer" as const,
+  level: "working" as const,
   burst: false,
   keyId: "key1",
 };

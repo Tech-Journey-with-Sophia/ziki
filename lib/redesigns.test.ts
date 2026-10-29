@@ -40,7 +40,7 @@ beforeEach(() => {
   db.redesignProposal.count.mockResolvedValue(0);
   db.attachment.updateMany.mockResolvedValue({ count: 0 });
   db.agentApiKey.findUnique.mockResolvedValue({ id: "key", revokedAt: null, agent: {
-    id: "agent", name: "Helper", ownerUserId: "owner", tenantId: "tenant", level: "contributor", burst: false, revokedAt: null, owner: { memberships: [{ tenantId: "tenant" }] },
+    id: "agent", name: "Helper", ownerUserId: "owner", tenantId: "tenant", level: "working", burst: false, revokedAt: null, owner: { memberships: [{ tenantId: "tenant" }] },
   } });
   db.$transaction.mockImplementation((run) => run(db));
   mocks.session.mockResolvedValue({ userId: "human" });
@@ -63,11 +63,8 @@ describe("redesign proposal creation", () => {
       data: { redesignProposalId: "proposal" },
     });
   });
-  it("requires a contributor key and valid input", async () => {
+  it("requires an agent key and valid input", async () => {
     expect((await propose(request(input))).status).toBe(401);
-    const key = await db.agentApiKey.findUnique();
-    db.agentApiKey.findUnique.mockResolvedValueOnce({ ...key, agent: { ...key.agent, level: "observer" } });
-    expect((await propose(request(input, true))).status).toBe(403);
     expect((await propose(request({}, true))).status).toBe(400);
     expect(db.redesignProposal.create).not.toHaveBeenCalled();
   });

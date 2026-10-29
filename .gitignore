@@ -51,3 +51,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /e2e/.auth/
+
+# Local CLI keyring: agent keys for the local sandbox (pnpm ziki setup)
+.ziki-cli/

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 /** POST /api/v1/jobs/reviews/{id}/accept — take a job review offer (#617). */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "job.reviews.accept", "reviewer", id, async (agent) => {
+  return agentIssueRequest(request, "job.reviews.accept", "working", id, async (agent) => {
     try {
       return NextResponse.json(await acceptJobReviewOffer(agent, id), { status: 200 });
     } catch (error) {

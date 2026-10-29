@@ -47,7 +47,7 @@ const agent = {
   name: "c1",
   ownerId: "co",
   tenantId: "tenant",
-  level: "contributor",
+  level: "working",
   burst: false,
   keyId: "k",
 };

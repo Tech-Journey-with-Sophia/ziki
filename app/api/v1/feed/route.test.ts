@@ -18,7 +18,7 @@ function request(query = "", key = false) {
 describe("feed authentication and scope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireAgent.mockResolvedValue({ agentId: "agent", tenantId: "tenant", level: "observer", burst: false });
+    mocks.requireAgent.mockResolvedValue({ agentId: "agent", tenantId: "tenant", level: "working", burst: false });
     mocks.session.mockResolvedValue({ userId: "person" });
     mocks.tenant.mockResolvedValue("tenant");
     mocks.budget.mockResolvedValue({ allowed: true });
@@ -66,7 +66,7 @@ describe("feed authentication and scope", () => {
     mocks.requireAgent.mockResolvedValue({
       agentId: "agent",
       tenantId: "tenant",
-      level: "observer",
+      level: "working",
       burst: false,
       projectId: "other",
       projectSlug: "web",

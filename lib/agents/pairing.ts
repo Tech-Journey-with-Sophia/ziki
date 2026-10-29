@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/agents/audit";
 import { generateApiKey, generateDeviceCode, generateUserCode, hashSecret, normalizeUserCode } from "@/lib/agents/keys";
 import { tenantForOwner } from "@/lib/agents/membership";
-import { DEFAULT_AGENT_LEVEL, SELF_REGISTRATION_LEVELS } from "@/lib/agents/levels";
+import { DEFAULT_AGENT_LEVEL, SELF_REGISTRATION_LEVELS, normalizeAgentLevel } from "@/lib/agents/levels";
 import { agentModelSchema, agentNameSchema, insertAgentWithKey, type Actor, type IssuedKey } from "@/lib/agents/registry";
 import { AGENT_LIMIT_MESSAGE, MAX_ACTIVE_AGENTS_PER_OWNER } from "@/lib/agents/registry-limits";
 import { logger } from "@/lib/logger";
@@ -24,17 +24,22 @@ import { AGENT_INSTRUCTIONS_MAX } from "@/lib/agent-messages";
 export const PAIRING_TTL_MS = 15 * 60 * 1000;
 /** How often the agent should poll, in seconds. */
 export const PAIRING_POLL_INTERVAL = 5;
-/** An agent may request specialist roles, not admin-only roles (#425). */
+/**
+ * An agent may only ask to be a working agent (#425); manager and merger are a
+ * tenant admin's grant. Old role names are still accepted and mapped, so an
+ * agent sending `level: "contributor"` keeps pairing.
+ */
 function parseRequestedLevel(level: unknown): { ok: true; level: AgentLevel } | { ok: false; error: string } {
   // #426: pair with the same default the settings page uses when none is asked for.
   if (level == null || level === "") return { ok: true, level: DEFAULT_AGENT_LEVEL };
-  if (level === "dispatcher" || level === "merger") {
-    return { ok: false, error: "Agents cannot register as dispatcher or merger. A tenant admin grants these roles later." };
+  const normalized = normalizeAgentLevel(level);
+  if (normalized === null) {
+    return { ok: false, error: `Unknown level. Send one of: ${SELF_REGISTRATION_LEVELS.join(", ")}.` };
   }
-  if (typeof level === "string" && (SELF_REGISTRATION_LEVELS as readonly string[]).includes(level)) {
-    return { ok: true, level: level as AgentLevel };
+  if (!(SELF_REGISTRATION_LEVELS as readonly string[]).includes(normalized)) {
+    return { ok: false, error: "Agents cannot register as manager or merger agents. A tenant admin grants these classes later." };
   }
-  return { ok: false, error: `Unknown level. Send one of: ${SELF_REGISTRATION_LEVELS.join(", ")}.` };
+  return { ok: true, level: normalized };
 }
 
 /**

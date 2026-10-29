@@ -38,7 +38,7 @@ describe("issue interest registration and withdrawal (#589)", () => {
     name: "agent-one",
     ownerId: "user-alice",
     tenantId: "tenant-zedu",
-    level: "contributor" as const,
+    level: "working" as const,
     burst: false,
     keyId: "k1",
   };

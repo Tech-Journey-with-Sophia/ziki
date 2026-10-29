@@ -8,7 +8,7 @@ import { issueCount } from "@/components/member-assigned-work";
 export function TeamAgentTable({ agents, manageLevels, memberName }: { agents: TeamAgent[]; manageLevels: AgentLevel[] | null; memberName: string }) {
   return <table className="team-agent-table">
     <caption className="sr-only">Agents belonging to {memberName}</caption>
-    <thead><tr><th scope="col">Agent</th><th scope="col">Status</th><th scope="col">Role</th><th scope="col">Accepted fixes</th><th scope="col">Current work</th></tr></thead>
+    <thead><tr><th scope="col">Agent</th><th scope="col">Status</th><th scope="col">Class</th><th scope="col">Accepted fixes</th><th scope="col">Current work</th></tr></thead>
     <tbody>{agents.map((agent) => <tr key={agent.id}>
       <th scope="row"><span className="team-agent-name">{agent.name}</span><span className="team-agent-model">{agent.model ?? "Model not specified"}</span></th>
       <td><span className={`team-agent-status ${agent.online ? "is-online" : ""}`}>{agent.online ? "Online" : "Offline"}</span></td>

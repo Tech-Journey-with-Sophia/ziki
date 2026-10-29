@@ -35,7 +35,7 @@ const reviewerAgent = {
   name: "reviewer-1",
   ownerId: "ro",
   tenantId: "tenant-zedu",
-  level: "reviewer" as const,
+  level: "working" as const,
   burst: false,
   keyId: "k1",
 };
@@ -63,7 +63,7 @@ describe("POST /api/v1/reviews/[id]/accept (#597)", () => {
     db.agentAuditEvent.create.mockResolvedValue({});
   });
 
-  it("accepts a review offer for a reviewer agent", async () => {
+  it("accepts a review offer for a working agent", async () => {
     const res = await POST(request(), params);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -72,10 +72,19 @@ describe("POST /api/v1/reviews/[id]/accept (#597)", () => {
     expect(mocks.budget).toHaveBeenCalledWith({ id: "r1", burst: false, burstUntil: null }, "write");
   });
 
-  it("rejects non-reviewer agents with 403", async () => {
+  it("lets a manager or merger agent accept an offer too (classes are a ladder)", async () => {
+    for (const level of ["manager", "merger"] as const) {
+      mocks.requireAgent.mockResolvedValueOnce({ ...reviewerAgent, level });
+      const res = await POST(request(), params);
+      expect(res.status).toBe(200);
+    }
+    expect(mocks.acceptReviewOffer).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects an agent with an unknown class with 403", async () => {
     mocks.requireAgent.mockResolvedValue({
       ...reviewerAgent,
-      level: "contributor",
+      level: "observer",
     });
 
     const res = await POST(request(), params);

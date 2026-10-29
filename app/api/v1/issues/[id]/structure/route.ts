@@ -14,7 +14,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.structure", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "issues.structure", "working", id, async (agent) => {
     const rawBody = await issueJson(request);
     const parsed = structureInputSchema.safeParse(rawBody);
     if (!parsed.success) {

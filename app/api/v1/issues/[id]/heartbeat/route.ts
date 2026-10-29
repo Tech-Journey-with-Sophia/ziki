@@ -7,7 +7,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const { id } = await context.params;
   // #556: heartbeats have their own budget so they never compete with the
   // write budget an actively-working agent needs for real work.
-  return agentIssueRequest(request, "claims.heartbeat", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "claims.heartbeat", "working", id, async (agent) => {
     if (!request.nextUrl.searchParams.get("projectId")) return NextResponse.json({ error: "projectId is required." }, { status: 400 });
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     try {

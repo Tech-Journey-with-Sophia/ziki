@@ -23,6 +23,28 @@ export const FINISHED_STATUS_FILTER = "finished";
 export const FINISHED_STATUS_VALUES = ["resolved", "closed"] as const;
 
 /**
+ * What the issues page calls each `?status=` value, on its tabs and in the
+ * Active filters chip, so the two always read the same ("Done", not "Resolved").
+ */
+const STATUS_FILTER_LABELS: Record<string, string> = {
+  escalated: "Inbox",
+  open: "Open",
+  in_progress: "In progress",
+  resolved: "Done",
+  ready_to_merge: "Ready to Merge",
+  auto_merge: "Live",
+  all: "All",
+  closed: "Closed",
+  rejected: "Rejected",
+  duplicate: "Duplicates",
+  [FINISHED_STATUS_FILTER]: "Closed (incl. resolved)",
+};
+
+export function statusFilterLabel(value: string): string {
+  return STATUS_FILTER_LABELS[value] ?? (statusLabel as Record<string, string>)[value] ?? value;
+}
+
+/**
  * The status filter a `?status=` value stands for: our own `finished` token,
  * or a real status. `null` when the value filters nothing.
  */

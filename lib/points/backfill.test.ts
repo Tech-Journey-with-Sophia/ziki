@@ -242,7 +242,7 @@ describe("standingValidationAwards (#539)", () => {
     claims: [],
   };
 
-  const val = (kind: string, verdict: string, userId: string, level = "reviewer") => ({
+  const val = (kind: string, verdict: string, userId: string, level = "working") => ({
     id: `v-${kind}-${verdict}-${userId}`,
     kind,
     verdict,
@@ -275,10 +275,10 @@ describe("standingValidationAwards (#539)", () => {
 
   it("pays a standing triager clearance and a duplicate marker, once per person", async () => {
     const db = dbWith([
-      val("duplicate", "reject", "u3", "triager"),
-      val("duplicate", "reject", "u3", "triager"),
-      val("duplicate", "reject", "u4"), // reviewer level: never a clearance
-      val("duplicate", "accept", "u5", "triager"),
+      val("duplicate", "reject", "u3"),
+      val("duplicate", "reject", "u3"),
+      val("duplicate", "reject", "u4", "manager"), // any class earns a clearance
+      val("duplicate", "accept", "u5"),
     ]);
     const entries = await standingValidationAwards(db, "bug-1");
     expect(entries).toContainEqual({
@@ -287,18 +287,21 @@ describe("standingValidationAwards (#539)", () => {
     expect(entries).toContainEqual({
       tenantId: "tenant-zedu", userId: "u5", bugId: "bug-1", role: "triager", points: 150, sourceKey: "duplicate-marker:bug-1:u5",
     });
+    expect(entries).toContainEqual({
+      tenantId: "tenant-zedu", userId: "u4", bugId: "bug-1", role: "triager", points: 30, sourceKey: "triager-clear:bug-1:u4",
+    });
     expect(entries.filter((e) => e.userId === "u3")).toHaveLength(1);
-    expect(entries.some((e) => e.userId === "u4")).toBe(false);
+    expect(entries).toHaveLength(3);
   });
 
   it("pays no confirming reviewers once a duplicate marker stands", async () => {
-    const db = dbWith([val("real", "accept", "u1"), val("duplicate", "accept", "u5", "triager")]);
+    const db = dbWith([val("real", "accept", "u1"), val("duplicate", "accept", "u5")]);
     const entries = await standingValidationAwards(db, "bug-1");
     expect(entries.map((e) => e.sourceKey)).toEqual(["duplicate-marker:bug-1:u5"]);
   });
 
   it.each(["reject", "accept"])("keeps a standing duplicate %s award after its triager later becomes the solver (#579)", async (verdict) => {
-    const validation = val("duplicate", verdict, "u3", "triager");
+    const validation = val("duplicate", verdict, "u3");
     const expected = await standingValidationAwards(dbWith([validation]), "bug-1");
     expect(expected).toHaveLength(1);
     const claimedDb = dbWith([validation], {
@@ -311,8 +314,8 @@ describe("standingValidationAwards (#539)", () => {
 
   it.each(["reject", "accept"])("still excludes a duplicate %s award credited to the reporter (#579)", async (verdict) => {
     const validation = {
-      ...val("duplicate", verdict, "reporter-1", "triager"),
-      agent: { id: "a-independent-triager", ownerUserId: "independent-triager", level: "triager" },
+      ...val("duplicate", verdict, "reporter-1"),
+      agent: { id: "a-independent-triager", ownerUserId: "independent-triager", level: "working" },
     };
     const db = dbWith([validation]);
     expect(await standingValidationAwards(db, "bug-1")).toEqual([]);

@@ -15,13 +15,13 @@ const bodySchema = z
 
 /**
  * POST /api/v1/issues/{id}/resolve — resolve an issue whose fix is merged
- * (Ziki #515). Requires contributor permission; the owner must be connected to
+ * (Ziki #515). Any working agent may call it; the owner must be connected to
  * the issue, and GitHub must confirm the pull request is merged into the
  * project's repo. No points are written. Charged to the write budget.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issue.resolved", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "issue.resolved", "working", id, async (agent) => {
     const parsed = bodySchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid_body", message: "Send a pullRequestUrl." }, { status: 400 });

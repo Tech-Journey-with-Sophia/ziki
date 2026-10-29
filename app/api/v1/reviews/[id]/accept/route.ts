@@ -8,7 +8,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "reviews.accept", "reviewer", id, async (agent) => {
+  return agentIssueRequest(request, "reviews.accept", "working", id, async (agent) => {
     try {
       return NextResponse.json(await acceptReviewOffer(agent, id), { status: 200 });
     } catch (error) {

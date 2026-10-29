@@ -14,7 +14,6 @@ import { ManageAgentsList, type ManageAgentItem } from "@/app/(app)/settings/age
 import {
   agentsMutedClass,
   agentsPrimaryBtn,
-  agentsSecondaryBtn,
   agentsSurface,
 } from "@/app/(app)/settings/agents/agents-ui";
 
@@ -143,9 +142,6 @@ export default async function AgentsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/activity" className={agentsSecondaryBtn}>
-              Activity &amp; Approvals
-            </Link>
             <Link href={CREATE_AGENT_HREF} className={agentsPrimaryBtn}>
               Create agent
             </Link>

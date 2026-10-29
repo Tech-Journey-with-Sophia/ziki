@@ -10,13 +10,9 @@ export async function notesRequest(
   run: (actor: NotesActor, params: Awaited<NotesRouteContext["params"]>) => Promise<unknown>, status = 200,
 ) {
   const params = await context.params;
-  return agentIssueRequest(request, action, "observer", params.id, async (agent) => {
+  return agentIssueRequest(request, action, "read", params.id, async (agent) => {
     try {
       const actor = await agentNotesActor(agent, params.id);
-      // Reading is universal; ordinary observer keys cannot contribute discussion.
-      if ((action === "notes.comment" || action === "notes.vote") && agent.level === "observer") {
-        throw new IssueApiError(403, "Observer agents can read notes but cannot comment or vote.");
-      }
       return NextResponse.json(await run(actor, params), { status });
     } catch (error) {
       if (error instanceof IssueApiError) throw error;

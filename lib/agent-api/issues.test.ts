@@ -62,7 +62,7 @@ beforeEach(() => {
   db.agentEvent.create.mockResolvedValue({ id: "event-a" });
   db.webhookSubscription.findMany.mockResolvedValue([]);
   db.agentApiKey.findUnique.mockResolvedValue({ id: "key-a", revokedAt: null, agent: {
-    id: "agent-a", name: "Agent A", ownerUserId: "owner-a", tenantId: "tenant-a", level: "contributor", burst: false, revokedAt: null,
+    id: "agent-a", name: "Agent A", ownerUserId: "owner-a", tenantId: "tenant-a", level: "working", burst: false, revokedAt: null,
     owner: { memberships: [{ tenantId: "tenant-a" }] },
   } });
   budget.mockResolvedValue({ allowed: true });
@@ -87,14 +87,14 @@ beforeEach(() => {
 });
 
 describe("agent issue API authentication", () => {
-  it.each(["triager", "reviewer"] as const)("lets a %s read and comment but not create or claim work", async (level) => {
+  it.each(["working", "manager", "merger"] as const)("lets a %s agent read, comment and file issues; direct claims stay retired", async (level) => {
     const key = await db.agentApiKey.findUnique();
     db.agentApiKey.findUnique.mockResolvedValue({ ...key, agent: { ...key.agent, level } });
     expect((await list(request())).status).toBe(200);
     expect((await comment(request("POST", { body: "Role-scoped assessment" }), context)).status).toBe(201);
-    expect((await create(request("POST", validBody))).status).toBe(403);
-    expect((await claim(request("POST", {}), context)).status).toBe(403);
-    expect(db.bug.create).not.toHaveBeenCalled();
+    expect((await create(request("POST", validBody))).status).toBe(201);
+    expect((await claim(request("POST", {}), context)).status).toBe(410);
+    expect(db.bug.create).toHaveBeenCalledTimes(1);
   });
   it("fails closed without a key on every route", async () => {
     const responses = await Promise.all([
@@ -116,11 +116,11 @@ describe("agent issue API authentication", () => {
     expect((await list(request())).status).toBe(401);
   });
 
-  it("allows observer reads but denies both writes and audits the denials", async () => {
+  it("fails closed for an agent with an unknown class and audits the denials", async () => {
     const key = await db.agentApiKey.findUnique();
     db.agentApiKey.findUnique.mockResolvedValue({ ...key, agent: { ...key.agent, level: "observer" } });
-    expect((await list(request())).status).toBe(200);
-    expect((await read(request(), context)).status).toBe(200);
+    expect((await list(request())).status).toBe(403);
+    expect((await read(request(), context)).status).toBe(403);
     expect((await create(request("POST", validBody))).status).toBe(403);
     expect((await comment(request("POST", { body: "hello" }), context)).status).toBe(403);
     expect(db.bug.create).not.toHaveBeenCalled();
@@ -805,7 +805,7 @@ describe("issue read confirmation", () => {
   });
 
   function triageClear(id: string, agentId: string, ownerUserId: string) {
-    return { id, agentId, onBehalfOfUserId: ownerUserId, agent: { id: agentId, ownerUserId, level: "triager" } };
+    return { id, agentId, onBehalfOfUserId: ownerUserId, agent: { id: agentId, ownerUserId, level: "working" } };
   }
 
   it("is confirmed once two distinct owners have accepted", async () => {

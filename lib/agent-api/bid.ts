@@ -175,7 +175,7 @@ export async function withdrawBid(caller: AgentContext, projectId: string, bugId
  * The agent's owner becomes the assignee, and the bid becomes an active claim.
  */
 export async function awardBid(actor: Actor, bidId: string, dispatcher?: AgentContext) {
-  if (dispatcher) requireLevel(dispatcher, "dispatcher");
+  if (dispatcher) requireLevel(dispatcher, "manager");
   try {
     const result = await prisma.$transaction(async (tx) => {
       const bid = await tx.issueBid.findUnique({

@@ -10,7 +10,7 @@ const bodySchema = missionCoverageSchema.extend({ projectId: z.string().trim().m
 /** POST JSON { projectId, issuesFiled } when the assigned route has been explored. */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const rawParams = await context.params;
-  return agentIssueRequest(request, "missions.covered", "contributor", `mission:${rawParams.id}`, async (agent) => {
+  return agentIssueRequest(request, "missions.covered", "working", `mission:${rawParams.id}`, async (agent) => {
     const params = paramsSchema.parse(rawParams);
     const body = bodySchema.parse(await issueJson(request));
     const scope = await issueProject(agent, request.nextUrl.searchParams, body.projectId);

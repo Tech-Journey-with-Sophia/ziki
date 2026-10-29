@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "escalations.read", "observer", id, async (agent) =>
+  return agentIssueRequest(request, "escalations.read", "read", id, async (agent) =>
     NextResponse.json({ escalation: await readAgentEscalation(agent, id) }),
   );
 }

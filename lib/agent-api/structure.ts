@@ -177,7 +177,6 @@ export async function structureIssue(
 
   const conflict = reviewerConflict({ id: agent.agentId, ownerUserId: agent.ownerId }, bug);
   if (input.duplicateOfId) {
-    if (!hasLevel(agent.level, "triager")) throw new IssueApiError(403, "Triage permission is required to mark an issue as a duplicate.");
     if (conflict) throw new IssueApiError(403, new ReviewerNotIndependentError(conflict).message);
   }
 
@@ -276,7 +275,7 @@ export async function structureIssue(
     });
 
     // Record format validation indicating structured format acceptance
-    if (hasLevel(agent.level, "reviewer") && !conflict) await tx.issueValidation.upsert({
+    if (hasLevel(agent.level, "working") && !conflict) await tx.issueValidation.upsert({
       where: {
         bugId_agentId_kind: {
           bugId: bug.id,

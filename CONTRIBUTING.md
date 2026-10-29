@@ -2,13 +2,13 @@
 
 Team **Zendor (Zedu-Endor)** — lead: [@Goodnessmbakara](https://github.com/Goodnessmbakara).
 
-This is Team Zendor's **Task 1** **Ziki Issues** project (HNG15) — `Zedu-Endor/issue-tracker`, a fork of [`emerjent/bug-tracker`](https://github.com/emerjent/bug-tracker) (formerly `zeduchat/bug-tracker`). It is **not** part of `zedu-fe`, `zedu-mobile`, or `zedu-desktop`. All PRs target **this** repository's `main`.
+This is Team Zendor's **Task 1** **Ziki Issues** project (HNG15) — [`emerjent/ziki`](https://github.com/emerjent/ziki) (renamed from `emerjent/bug-tracker`, formerly `zeduchat/bug-tracker`). It is **not** part of `zedu-fe`, `zedu-mobile`, or `zedu-desktop`. All PRs target **this** repository's `main`.
 
 ## Default branch
 
 - Default branch: **`main`**
 - Always branch from an up-to-date `main`
-- Open PRs against `main` in `Zedu-Endor/issue-tracker` — never against `zedu-hng` or other Zedu product repos
+- Open PRs against `main` in `emerjent/ziki` — never against `zedu-hng` or other Zedu product repos
 
 ## Branch naming
 
@@ -49,7 +49,7 @@ Keep the subject imperative and under ~72 characters. One logical change per com
 
 1. One logical change per PR — keep diffs reviewable
 2. Fill in the PR template (Summary + Test plan)
-3. Target **`main`** on `Zedu-Endor/issue-tracker`
+3. Target **`main`** on `emerjent/ziki`
 4. Do not mix unrelated refactors with feature work
 5. Never force-push (`git push --force`, `-f`, or `--force-with-lease`)
 6. Do not commit secrets (`.env`, keys, credentials)
@@ -110,16 +110,17 @@ Production and CI environments use `prisma migrate deploy` to apply pending migr
 
 When contributing as or alongside autonomous agents:
 - **Mistake Registry**: Check `GET /api/v1/projects/{id}/mistakes` (or `ziki_get_project_mistakes`) to learn from past anti-patterns.
-- **Evidence Submissions**: Contributor PR submissions (`POST /api/v1/issues/{id}/github`) must provide visual screenshot proofs (`screenshots`) and test execution outputs (`testResults`).
+- **Evidence Submissions**: Agent PR submissions (`POST /api/v1/issues/{id}/github`) must provide visual screenshot proofs (`screenshots`) and test execution outputs (`testResults`).
 - **Two-Stage Merge Gate**:
-  - `merger` agents evaluate mergeability and test verdicts, setting `reviewStatus: "ready_to_merge"`.
-  - `admin_merger` agents verify passing GitHub Actions deployment checks before executing the Git merge (`POST /api/v1/issues/{id}/admin-merge`).
-- **Streaming Updates**: Real-time agent monitoring uses Server-Sent Events (SSE) at `GET /api/v1/events/stream`.
+  - `manager` agents evaluate mergeability and test verdicts, then accept (`reviewStatus: "ready_to_merge"`) or reject (`reviewStatus: "rejected"`) the fix.
+  - `merger` agents verify passing GitHub Actions deployment checks before executing the Git merge (`POST /api/v1/issues/{id}/admin-merge`).
+  - Every agent starts as a `working` agent (file, claim, deliver, confirm, triage, test); a tenant admin grants `manager` and `merger`. See [Agent Levels](./docs/ziki-for-agents.md#agent-levels).
+- **Finding Work**: Agents watch their project's work feed, `GET /<project-slug>/work`, about every 30 seconds. It is the one place work appears. Server-Sent Events at `GET /api/v1/events/stream` are for reacting to activity.
 
 ## Continuous Deployment Flow
 
 - **Production (Coolify)**:
-  The upstream repository `emerjent/bug-tracker` (formerly `zeduchat/bug-tracker`) deploys to production on Coolify (`ziki.dev`, formerly `issues.zedu.chat`). Only verified and peer-reviewed PRs from team branches are submitted upstream.
+  `emerjent/ziki` `main` deploys to production on Coolify (`ziki.dev`, formerly `issues.zedu.chat`). `GET https://ziki.dev/api/health` reports the deployed commit.
 
 ## Local development
 

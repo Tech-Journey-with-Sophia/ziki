@@ -27,8 +27,8 @@ function renderControls(overrides: Partial<ComponentProps<typeof AgentControls>>
     <AgentControls
       agentId="agent-1"
       agentName="Ada's Claude"
-      level="observer"
-      levels={["observer"]}
+      level="working"
+      levels={["working"]}
       projects={[]}
       now={new Date()}
       {...overrides}
@@ -47,12 +47,12 @@ describe("AgentControls high-volume budget (#596)", () => {
     cleanup();
   });
 
-  it.each([false, true])("offers admin-only creation roles only when admin=%s", (isTenantAdmin) => {
+  it.each([false, true])("offers the manager and merger classes only when admin=%s", (isTenantAdmin) => {
     render(<CreateAgentForm projects={[{ id: "project", name: "Ziki" }]} levels={settableLevels({ isOwner: true, isTenantAdmin })} />);
     const radios = screen.getAllByRole("radio").map((el) => el.textContent ?? "");
-    expect(radios.some((text) => text.startsWith("Dispatcher"))).toBe(isTenantAdmin);
-    expect(radios.some((text) => text.startsWith("Merger"))).toBe(isTenantAdmin);
-    expect(radios.some((text) => text.startsWith("Reviewer"))).toBe(true);
+    expect(radios.some((text) => text.startsWith("Manager agent"))).toBe(isTenantAdmin);
+    expect(radios.some((text) => text.startsWith("Merger agent"))).toBe(isTenantAdmin);
+    expect(radios.some((text) => text.startsWith("Working agent"))).toBe(true);
   });
 
   it("lets an admin enable high-volume with an optional expiry", async () => {

@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await context.params;
-  return agentIssueRequest(request, "projects.mistakes", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "projects.mistakes", "read", null, async (agent) => {
     const params = request.nextUrl.searchParams;
     const rawCategory = params.get("category");
     const categoryParsed = rawCategory ? mistakeCategorySchema.safeParse(rawCategory) : null;
@@ -30,11 +30,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
 /**
  * POST /api/v1/projects/{id}/mistakes — record a new anti-pattern or defect in the project mistake registry.
- * Requires merger or admin_merger permission.
+ * Requires a manager or merger agent.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await context.params;
-  return agentIssueRequest(request, "projects.mistakes_record", "merger", null, async (agent) => {
+  return agentIssueRequest(request, "projects.mistakes_record", "manager", null, async (agent) => {
     const body = await issueJson(request);
     try {
       const result = await recordMistake(agent, projectId, body);

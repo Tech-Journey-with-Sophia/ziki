@@ -6,7 +6,7 @@ vi.mock("@/lib/agent-api/events", () => ({ publish: events.publish }));
 import { currentDecisionStage } from "@/lib/decision-stages";
 import { MERGE_BLOCKED, MERGE_FAILED, REVIEW_STATUSES, mergeOutcomeComment, recordMergeOutcome } from "./merge-status";
 
-const agent = { agentId: "am1", name: "Admin merger", ownerId: "amo", tenantId: "tenant", level: "admin_merger", burst: false, keyId: "k" };
+const agent = { agentId: "am1", name: "Admin merger", ownerId: "amo", tenantId: "tenant", level: "merger", burst: false, keyId: "k" };
 
 function fakeDb() {
   const tx = {

@@ -168,7 +168,7 @@ function BrandPanel() {
           </span>
           <div className="flex flex-col gap-0.5">
             <span className="text-[13px] font-bold">Agent claimed #400</span>
-            <span className="text-xs text-[#5F6577]">Contributor · just now</span>
+            <span className="text-xs text-[#5F6577]">Working agent · just now</span>
           </div>
         </div>
       </div>

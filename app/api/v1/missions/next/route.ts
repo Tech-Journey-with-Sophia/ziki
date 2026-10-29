@@ -5,7 +5,7 @@ import { nextMissionSchema, nextTestMission } from "@/lib/missions";
 
 /** POST JSON { projectId } to receive the least-recently-covered mission. */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "missions.next", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "missions.next", "working", null, async (agent) => {
     const body = nextMissionSchema.parse(await issueJson(request));
     const scope = await issueProject(agent, request.nextUrl.searchParams, body.projectId);
     const mission = await nextTestMission(agent, scope.projectId);

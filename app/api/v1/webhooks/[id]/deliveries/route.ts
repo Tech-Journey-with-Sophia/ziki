@@ -12,7 +12,7 @@ import { decodeDeliveryCursor, deliveryQuerySchema, listDeliveries } from "@/lib
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return agentIssueRequest(request, "webhooks.deliveries", "observer", id, async (agent) => {
+  return agentIssueRequest(request, "webhooks.deliveries", "read", id, async (agent) => {
     const parsed = deliveryQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) {
       return NextResponse.json(

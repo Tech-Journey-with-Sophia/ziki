@@ -119,7 +119,15 @@ export const POINT_AWARD_MAX = 1_000_000;
 /** Largest points goal a super admin can store. */
 export const POINT_TARGET_MAX = 100_000_000;
 
-export type PointRole = "solver" | "reporter" | "reviewer" | "triager" | "submission" | "dispatcher";
+export type PointRole = "solver" | "reporter" | "reviewer" | "triager" | "submission" | "dispatcher" | "idea";
+
+/** Paid once per person per idea for their first opinion on it: a validation or a comment (#work-feed). */
+export const IDEA_CONTRIBUTION_POINTS = 1;
+
+/** Idempotency key for an idea contribution, so each person earns once per idea. */
+export function ideaContributionSourceKey(bugId: string, userId: string): string {
+  return `idea:${bugId}:${userId}`;
+}
 
 /** Idempotency key for paying the triager who cleared an issue as not a duplicate. */
 export function triagerClearSourceKey(bugId: string, userId: string): string {

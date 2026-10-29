@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /** GET ?projectId= — the project's goals with budget summaries, newest first (#616). */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "goals.list", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "goals.list", "read", null, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     return NextResponse.json({ goals: await listGoals(scope.tenantId, scope.projectId) });
   });
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
 /** POST JSON with title, budgetPool, optional description — creates a goal (#616). */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "goals.create", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "goals.create", "working", null, async (agent) => {
     const parsed = createGoalSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid goal request.", details: parsed.error.issues }, { status: 400 });

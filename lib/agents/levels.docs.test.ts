@@ -73,7 +73,8 @@ function codeLevels(): Map<string, string> {
     handlers.forEach((handler, i) => {
       const body = source.slice(handler.index, handlers[i + 1]?.index ?? source.length);
       const level = /agentIssueRequest\(\s*[^,]+,\s*[^,]+,\s*"(\w+)"/.exec(body) ?? /requireLevel\(\s*\w+,\s*"(\w+)"\)/.exec(body);
-      if (level) levels.set(`${handler[1]} ${routePath(file)}`, level[1]);
+      // `"read"` is a working-agent route charged to the read budget.
+      if (level) levels.set(`${handler[1]} ${routePath(file)}`, level[1] === "read" ? "working" : level[1]);
     });
   }
   return levels;
@@ -84,19 +85,20 @@ function codeLevels(): Map<string, string> {
  * one later, with the file and check that does it.
  */
 const ENFORCED_ELSEWHERE: Record<string, { file: string; check: string }> = {
-  "POST /api/v1/issues/{id}/comments": { file: "app/api/v1/issues/[id]/comments/route.ts", check: '"comments.create", "comment"' },
-  "POST /api/v1/issues/{id}/vote": { file: "app/api/v1/issues/[id]/vote/route.ts", check: '"issues.vote", "comment"' },
-  "DELETE /api/v1/issues/{id}/vote": { file: "app/api/v1/issues/[id]/vote/route.ts", check: '"issues.vote_remove", "comment"' },
-  "GET /api/v1/dispatcher/metrics": { file: "app/api/v1/dispatcher/metrics/route.ts", check: 'hasLevel(agent.level, "dispatcher")' },
-  "GET /api/v1/dispatcher/ready-issues": { file: "app/api/v1/dispatcher/ready-issues/route.ts", check: 'hasLevel(agent.level, "dispatcher")' },
-  "GET /api/v1/contributor/ready-issues": { file: "app/api/v1/contributor/ready-issues/route.ts", check: 'hasLevel(agent.level, "contributor")' },
-  "GET /api/v1/triager/pending-issues": { file: "app/api/v1/triager/pending-issues/route.ts", check: 'hasLevel(agent.level, "triager")' },
-  "GET /api/v1/reviewer/pending-issues": { file: "app/api/v1/reviewer/pending-issues/route.ts", check: 'hasLevel(agent.level, "reviewer")' },
-  "GET /api/v1/merger/ready-issues": { file: "app/api/v1/merger/ready-issues/route.ts", check: 'hasLevel(agent.level, "merger")' },
-  "POST /api/v1/issues/{id}/merge": { file: "lib/agent-api/merge.ts", check: 'hasLevel(agent.level, "merger")' },
-  "POST /api/v1/issues/{id}/admin-merge": { file: "lib/agent-api/merge.ts", check: 'hasLevel(agent.level, "admin_merger")' },
-  "POST /api/v1/issues/{id}/test-results": { file: "lib/agent-api/test-verdict.ts", check: 'hasLevel(agent.level, "reviewer")' },
-  "POST /api/v1/issues/{id}/validations": { file: "lib/agent-api/validation.ts", check: 'body.kind === "duplicate" ? "triager" : "reviewer"' },
+  "POST /api/v1/issues/{id}/comments": { file: "app/api/v1/issues/[id]/comments/route.ts", check: '"comments.create", "working"' },
+  "POST /api/v1/issues/{id}/vote": { file: "app/api/v1/issues/[id]/vote/route.ts", check: '"issues.vote", "working"' },
+  "DELETE /api/v1/issues/{id}/vote": { file: "app/api/v1/issues/[id]/vote/route.ts", check: '"issues.vote_remove", "working"' },
+  "GET /api/v1/dispatcher/metrics": { file: "app/api/v1/dispatcher/metrics/route.ts", check: 'hasLevel(agent.level, "manager")' },
+  "GET /api/v1/dispatcher/ready-issues": { file: "app/api/v1/dispatcher/ready-issues/route.ts", check: 'hasLevel(agent.level, "manager")' },
+  "GET /api/v1/contributor/ready-issues": { file: "app/api/v1/contributor/ready-issues/route.ts", check: 'hasLevel(agent.level, "working")' },
+  "GET /api/v1/triager/pending-issues": { file: "app/api/v1/triager/pending-issues/route.ts", check: 'hasLevel(agent.level, "working")' },
+  "GET /api/v1/reviewer/pending-issues": { file: "app/api/v1/reviewer/pending-issues/route.ts", check: 'hasLevel(agent.level, "working")' },
+  "GET /api/v1/merger/ready-issues": { file: "app/api/v1/merger/ready-issues/route.ts", check: 'hasLevel(agent.level, "manager")' },
+  "POST /api/v1/issues/{id}/merge": { file: "lib/agent-api/merge.ts", check: 'hasLevel(agent.level, "manager")' },
+  "POST /api/v1/issues/{id}/admin-merge": { file: "lib/agent-api/merge.ts", check: 'hasLevel(agent.level, "merger")' },
+  "POST /api/v1/issues/{id}/test-results": { file: "lib/agent-api/test-verdict.ts", check: 'hasLevel(agent.level, "working")' },
+  // Any valid agent key: every class may validate and triage.
+  "POST /api/v1/issues/{id}/validations": { file: "app/api/v1/issues/[id]/validations/route.ts", check: "agent = await requireAgent(req);" },
 };
 
 describe("llms.txt Agent Levels table matches the per-route Level lines (#464)", () => {
@@ -119,8 +121,6 @@ describe("llms.txt Agent Levels table matches the per-route Level lines (#464)",
     for (const [level, routes] of rows) {
       for (const route of routes) {
         const stated = sections.get(route);
-        // POST /issues/{id}/validations is triager for duplicates, reviewer otherwise.
-        if (route === "POST /api/v1/issues/{id}/validations" && level === "triager") continue;
         if (stated !== level) misplaced.push(`${route}: table ${level}, section ${stated ?? "none"}`);
       }
     }
@@ -145,7 +145,7 @@ describe("llms.txt Agent Levels table matches the per-route Level lines (#464)",
 
   it("gives the inbox and the event stream a Level line", () => {
     for (const route of ["GET /api/v1/inbox", "POST /api/v1/inbox/read", "GET /api/v1/events/stream"]) {
-      expect(sections.get(route)).toBe("observer");
+      expect(sections.get(route)).toBe("working");
     }
   });
 });

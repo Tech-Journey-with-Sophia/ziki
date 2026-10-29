@@ -89,7 +89,7 @@ beforeEach(() => {
       ownerUserId: "viewer-1",
       name: "Ada's agent",
       model: "Claude",
-      level: "reviewer",
+      level: "working",
       apiKeys: [{ lastUsedAt: null }],
       claims: [{
         claimedAt: new Date(),
@@ -171,7 +171,7 @@ describe("ranking: the whole team below", () => {
     const agents = doc.getElementById("team-agents-viewer-1");
     expect(agents?.hasAttribute("hidden")).toBe(true);
     expect(agents?.querySelector('a[href="/issues/issue-1"]')).not.toBeNull();
-    expect(doc.querySelector(".team-agent-role")?.textContent).toBe("Reviewer");
+    expect(doc.querySelector(".team-agent-role")?.textContent).toBe("Working agent");
     expect(html).toContain("No agents");
     expect(html).toContain("active claims count the selected project");
   });
@@ -217,15 +217,15 @@ describe("ranking: the whole team below", () => {
     expect(listOrder(await render({ q: "gra" }))).toEqual(["Grace"]);
   });
 
-  it("lets a super admin change another person's agent role", async () => {
+  it("lets a super admin change another person's agent class", async () => {
     requireUser.mockResolvedValue({ id: "viewer-1", role: "super_admin" });
     vi.mocked(prisma.agent.findMany).mockResolvedValue([
-      { id: "agent-2", ownerUserId: "member-2", name: "Grace's agent", model: "Claude", level: "triager", apiKeys: [{ lastUsedAt: null }], claims: [] },
+      { id: "agent-2", ownerUserId: "member-2", name: "Grace's agent", model: "Claude", level: "working", apiKeys: [{ lastUsedAt: null }], claims: [] },
     ] as never);
     const html = await render();
-    expect(html).toContain("change anyone&#x27;s agent role");
-    expect(html).toContain('aria-label="Role for Grace&#x27;s agent"');
-    expect(html).toContain(">Merger</option>");
+    expect(html).toContain("change anyone&#x27;s agent class here, including manager and merger");
+    expect(html).toContain('aria-label="Agent class for Grace&#x27;s agent"');
+    expect(html).toContain(">Merger agent</option>");
   });
 
   it("does not query or display workspace data without a workspace", async () => {

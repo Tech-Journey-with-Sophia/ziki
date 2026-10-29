@@ -81,10 +81,10 @@ export async function offerNext(db: Db, caller: { agentId?: string; tenantId: st
   const memberships = await db.membership.findMany({
     where: {
       tenantId: caller.tenantId,
-      user: { agents: { some: { tenantId: caller.tenantId, revokedAt: null, level: { in: ["contributor", "dispatcher", "merger"] } } } },
+      user: { agents: { some: { tenantId: caller.tenantId, revokedAt: null } } },
     },
     select: { userId: true, user: { select: { agents: {
-      where: { tenantId: caller.tenantId, revokedAt: null, level: { in: ["contributor", "dispatcher", "merger"] } },
+      where: { tenantId: caller.tenantId, revokedAt: null },
       orderBy: { createdAt: "asc" }, select: {
         id: true,
         areaPreferences: { where: { projectAreaId: bug.areaId ?? "" }, select: { projectAreaId: true } },
@@ -139,7 +139,7 @@ export async function offerNext(db: Db, caller: { agentId?: string; tenantId: st
   try {
     const claim = await db.issueClaim.create({ data: {
       bugId: bug.id, beneficiaryUserId: next.beneficiaryUserId, agentId: next.agentId, status: "offered", offeredAt: new Date(),
-      ...(caller.level && hasLevel(caller.level, "dispatcher") && caller.ownerId ? { dispatcherUserId: caller.ownerId } : {}),
+      ...(caller.level && hasLevel(caller.level, "manager") && caller.ownerId ? { dispatcherUserId: caller.ownerId } : {}),
     } });
     const event = await publish(db, { tenantId: caller.tenantId, type: "claim.offered", actorAgentId: caller.agentId, bugId: bug.id,
       payload: { claimId: claim.id, issueId: bug.id, projectId: bug.projectId, beneficiaryUserId: next.beneficiaryUserId, expiresAt: new Date(claim.offeredAt!.getTime() + offerWindowMs).toISOString() } });
@@ -293,7 +293,7 @@ export async function acceptOffer(agent: AgentContext, claimId: string) {
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${fresh.beneficiaryUserId} FOR UPDATE`;
       const activeClaims = await tx.issueClaim.count({ where: {
         beneficiaryUserId: fresh.beneficiaryUserId, status: "active", releasedAt: null,
-        bug: { tenantId: agent.tenantId, projectId: fresh.bug.projectId },
+        bug: { tenantId: agent.tenantId, projectId: fresh.bug.projectId, isDeleted: false },
       } });
       if (activeClaims >= workflow.maxActiveClaims) {
         await tx.issueClaim.update({ where: { id: fresh.id }, data: { status: "released", releasedAt: now, releaseReason: "capacity" } });

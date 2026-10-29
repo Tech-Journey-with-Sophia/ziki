@@ -263,6 +263,43 @@ describe("issue list layout", () => {
     expect(nav).toContain('href="/issues?status=resolved&amp;platform=cat-web"');
   });
 
+  it("counts every issue in the platform menu on the Inbox, and a pick opens the All tab", async () => {
+    groupBy.mockResolvedValue([
+      { categoryId: "cat-web", _count: { _all: 4 } },
+      { categoryId: "cat-mobile", _count: { _all: 2 } },
+    ] as never);
+    const html = await renderList({ inbox: "design" });
+    const tabQuery = groupBy.mock.calls.find(([args]) => args.by[0] === "categoryId")![0];
+    expect(tabQuery.where).not.toHaveProperty("agentQuestions");
+    expect(tabQuery.where).not.toHaveProperty("redesigns");
+    expect(tabQuery.where).not.toHaveProperty("status");
+    const nav = html.match(/<nav [^>]*aria-label="Platforms"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    expect(nav).toContain('href="/issues?status=all&amp;platform=cat-web"');
+    expect(nav).toContain('href="/issues?status=all"');
+    expect(nav).not.toContain("inbox=");
+  });
+
+  it("counts each platform's total in the platform menu, whatever status tab is picked", async () => {
+    for (const status of ["open", "in_progress", "resolved", "ready_to_merge", "auto_merge", "all"]) {
+      groupBy.mockClear();
+      await renderList({ status, severity: "high" });
+      const tabQuery = groupBy.mock.calls.find(([args]) => args.by[0] === "categoryId")![0];
+      for (const key of ["status", "reviewStatus", "AND", "categoryId"]) expect(tabQuery.where).not.toHaveProperty(key);
+      // Other filters still narrow it.
+      expect(tabQuery.where?.severity).toBe("high");
+    }
+  });
+
+  it("keeps the Ready to Merge and Live clauses out of the other tabs' counts", async () => {
+    for (const status of ["ready_to_merge", "auto_merge"]) {
+      groupBy.mockClear();
+      await renderList({ status });
+      const statusCount = groupBy.mock.calls.find(([args]) => args?.by?.[0] === "status")![0];
+      expect(statusCount.where).not.toHaveProperty("reviewStatus");
+      expect(statusCount.where).not.toHaveProperty("status");
+    }
+  });
+
   it("puts Inbox at the left of the tab row: it lists the escalated issues, like a tab, with the tabs on the right", async () => {
     count.mockResolvedValue(2 as never);
     const html = await renderList({ status: "escalated" });
@@ -296,8 +333,8 @@ describe("issue list layout", () => {
 
   it("shows your agents, their status and what they've done beside how the Inbox works", async () => {
     ownAgents.mockResolvedValueOnce([
-      { id: "a1", name: "Scout", model: null, level: "triager", status: "working", activity: "Working on #3 Seed", lastSeenAt: null },
-      { id: "a2", name: "Lens", model: null, level: "reviewer", status: "waiting", activity: "Waiting for your answer", lastSeenAt: null },
+      { id: "a1", name: "Scout", model: null, level: "working", status: "working", activity: "Working on #3 Seed", lastSeenAt: null },
+      { id: "a2", name: "Lens", model: null, level: "working", status: "waiting", activity: "Waiting for your answer", lastSeenAt: null },
     ]);
     workDone.mockResolvedValueOnce(new Map([["a1", { confirmed: 3, rejected: 0, reviews: 1 }]]));
     const html = await renderList({ status: "escalated" });
@@ -427,10 +464,42 @@ describe("issue list layout", () => {
   });
 
   it("lets an explicit status filter win over the default (#1058)", async () => {
-    const html = await renderList({ status: "resolved" });
-    expect(findMany.mock.calls.at(-1)![0].where.status).toBe("resolved");
+    const html = await renderList({ status: "open" });
+    expect(findMany.mock.calls.at(-1)![0].where.status).toBe("open");
     expect(html).not.toContain("Show 0 resolved");
     expect(html).not.toContain("Hide resolved");
+  });
+
+  it("lists finished work outside Ready to Merge and Live under Done", async () => {
+    await renderList({ status: "resolved" });
+    const where = findMany.mock.calls.at(-1)![0].where;
+    expect(where.status).toEqual({ in: ["resolved", "closed"] });
+    expect(where.AND).toEqual([{ OR: [{ reviewStatus: null }, { reviewStatus: { notIn: ["ready_to_merge", "merged"] } }] }]);
+    // The tab counts don't inherit the Done clause.
+    const statusCount = groupBy.mock.calls.find(([args]) => args?.by?.[0] === "status")![0];
+    expect(statusCount.where).not.toHaveProperty("AND");
+  });
+
+  it("splits All across the status tabs: Open + In progress + Done + Ready to Merge + Live = All", async () => {
+    groupBy.mockImplementation((async (args: { by: string[] }) =>
+      args.by[0] === "status"
+        ? [
+            { status: "open", _count: { _all: 9 } },
+            { status: "in_progress", _count: { _all: 5 } },
+            { status: "resolved", _count: { _all: 7 } },
+            { status: "closed", _count: { _all: 3 } },
+          ]
+        : []) as never);
+    count.mockImplementation((async (args: { where?: { reviewStatus?: string } }) =>
+      args?.where?.reviewStatus === "ready_to_merge" ? 2 : args?.where?.reviewStatus === "merged" ? 3 : 0) as never);
+    const html = await renderList({ status: "all" });
+    const nav = html.match(/<nav aria-label="Issue status"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    const counts = Object.fromEntries(
+      [...nav.matchAll(/<\/span>([A-Za-z ]+)<span class="issues-status-count">(\d+)<\/span>/g)].map((m) => [m[1], Number(m[2])]),
+    );
+    // Done = resolved 7 + closed 3 - ready to merge 2 - live 3.
+    expect(counts).toEqual({ Open: 9, "In progress": 5, Done: 5, "Ready to Merge": 2, Live: 3, All: 24 });
+    expect(counts.Open + counts["In progress"] + counts.Done + counts["Ready to Merge"] + counts.Live).toBe(counts.All);
   });
 
   it("shows the vote count once and no proof-link count in rows (#1060)", async () => {

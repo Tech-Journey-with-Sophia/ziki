@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 /** GET ?projectId= — one goal with its budget summary and live allocations (#616). */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "goals.read", "observer", id, async (agent) => {
+  return agentIssueRequest(request, "goals.read", "read", id, async (agent) => {
     await issueProject(agent, request.nextUrl.searchParams);
     const { goal, allocations } = await readGoal(agent, id);
     return NextResponse.json({ goal, budget: goal.budget, allocations });
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 /** PATCH JSON `{ "status": "active" | "completed" | "cancelled" }` (#616). */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "goals.update", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "goals.update", "working", id, async (agent) => {
     const parsed = updateGoalStatusSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid goal status.", details: parsed.error.issues }, { status: 400 });

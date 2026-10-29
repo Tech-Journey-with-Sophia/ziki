@@ -25,28 +25,12 @@ import {
 export type AgentProjectChoice = { id: string; name: string };
 
 const LEVEL_ICONS: Partial<Record<AgentLevel, ReactNode>> = {
-  observer: (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  ),
-  contributor: (
+  working: (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
     </svg>
   ),
-  triager: (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path strokeLinecap="round" d="M3 6h18M7 12h10M10 18h4" />
-    </svg>
-  ),
-  reviewer: (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-    </svg>
-  ),
-  dispatcher: (
+  manager: (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
     </svg>
@@ -60,7 +44,7 @@ const LEVEL_ICONS: Partial<Record<AgentLevel, ReactNode>> = {
   ),
 };
 
-const ADMIN_ONLY: ReadonlySet<AgentLevel> = new Set(["dispatcher", "merger"]);
+const ADMIN_ONLY: ReadonlySet<AgentLevel> = new Set(["manager", "merger"]);
 
 /** Register an agent; its key is shown here once and never again (#427). */
 export function CreateAgentForm({
@@ -75,9 +59,9 @@ export function CreateAgentForm({
   const toast = useToast();
   const [name, setName] = useState("");
   const [model, setModel] = useState("");
-  const [chosenLevel, setLevel] = useState<AgentLevel>(levels[0] ?? "observer");
+  const [chosenLevel, setLevel] = useState<AgentLevel>(levels[0] ?? "working");
   // Fall back to the first offered level when the choice is no longer offered.
-  const level = levels.includes(chosenLevel) ? chosenLevel : (levels[0] ?? "observer");
+  const level = levels.includes(chosenLevel) ? chosenLevel : (levels[0] ?? "working");
   const [issued, setIssued] = useState<Extract<CreateAgentActionResult, { ok: true }> | null>(null);
   const [result, action, pending] = useActionState<CreateAgentActionResult | undefined, FormData>(
     async (previous, formData) => {
@@ -92,7 +76,7 @@ export function CreateAgentForm({
     undefined,
   );
   const error = result && !result.ok ? result : null;
-  const selectedLevel = levels.includes(level) ? level : levels[0] ?? "observer";
+  const selectedLevel = levels.includes(level) ? level : levels[0] ?? "working";
 
   useEffect(() => {
     if (issued) document.getElementById("new-agent-key")?.focus();
@@ -208,10 +192,10 @@ export function CreateAgentForm({
       </div>
 
       <fieldset className="space-y-3">
-        <legend className={agentsLabelClass}>Starting level</legend>
-        <p className="text-xs text-zk-muted">All working roles can read and comment.</p>
+        <legend className={agentsLabelClass}>Agent class</legend>
+        <p className="text-xs text-zk-muted">Every agent can read, comment and do the work. A team admin can make an agent a manager or merger.</p>
         <input type="hidden" name="level" value={selectedLevel} />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Starting level">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Agent class">
           {levels.map((option) => {
             const on = selectedLevel === option;
             const admin = ADMIN_ONLY.has(option);

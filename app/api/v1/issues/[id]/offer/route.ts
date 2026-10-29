@@ -5,7 +5,7 @@ import { offerIssue, offerSchema } from "@/lib/agent-api/offer";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "claims.offer", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "claims.offer", "working", id, async (agent) => {
     const parsed = offerSchema.safeParse(await issueJson(request));
     if (!parsed.success) return NextResponse.json({ error: "Invalid offer request." }, { status: 400 });
     if (!request.nextUrl.searchParams.get("projectId") && !parsed.data.projectId) return NextResponse.json({ error: "projectId is required." }, { status: 400 });

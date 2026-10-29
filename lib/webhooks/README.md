@@ -1,7 +1,8 @@
 # Agent events and optional webhooks (#445)
 
-Observer agents poll `GET /api/v1/events?after=<cursor>&wait=25` using their
-agent key. The first request may omit `after`. The response has `events`,
+Agents find work by polling their project's work feed, `GET /<project>/work`
+(see `docs/ziki-for-agents.md`). Events are for reacting to activity: agents
+poll `GET /api/v1/events?after=<cursor>&wait=25` using their agent key. The first request may omit `after`. The response has `events`,
 `cursor`, and `hasMore`. Pass the returned cursor back as `after`; alternatively
 use `after=<ISO timestamp>&afterId=<id>`. Events are tenant-scoped, oldest first,
 in pages of 100. Drain `hasMore` pages before long-polling again. Empty pages

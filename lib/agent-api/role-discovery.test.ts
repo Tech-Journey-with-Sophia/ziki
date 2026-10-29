@@ -24,10 +24,10 @@ import { findTriageableIssues } from "./triager";
 import { findClaimableIssues } from "./contributor";
 import { AgentLevelError } from "@/lib/agents/levels";
 
-const contributor = { agentId: "c1", name: "c1", ownerId: "co", tenantId: "tenant", level: "contributor" as const, burst: false, keyId: "k" };
-const triager = { agentId: "t1", name: "t1", ownerId: "to", tenantId: "tenant", level: "triager" as const, burst: false, keyId: "k" };
-const reviewer = { agentId: "r1", name: "r1", ownerId: "ro", tenantId: "tenant", level: "reviewer" as const, burst: false, keyId: "k" };
-const merger = { agentId: "m1", name: "m1", ownerId: "mo", tenantId: "tenant", level: "merger" as const, burst: false, keyId: "k" };
+const contributor = { agentId: "c1", name: "c1", ownerId: "co", tenantId: "tenant", level: "working" as const, burst: false, keyId: "k" };
+const triager = { agentId: "t1", name: "t1", ownerId: "to", tenantId: "tenant", level: "working" as const, burst: false, keyId: "k" };
+const reviewer = { agentId: "r1", name: "r1", ownerId: "ro", tenantId: "tenant", level: "working" as const, burst: false, keyId: "k" };
+const merger = { agentId: "m1", name: "m1", ownerId: "mo", tenantId: "tenant", level: "manager" as const, burst: false, keyId: "k" };
 
 describe("Role-based discovery functions", () => {
   beforeEach(() => {
@@ -35,7 +35,7 @@ describe("Role-based discovery functions", () => {
   });
 
   describe("findReadyToMergeIssues", () => {
-    it("enforces merger level permission", async () => {
+    it("needs a manager agent", async () => {
       await expect(findReadyToMergeIssues(contributor, "p1")).rejects.toBeInstanceOf(AgentLevelError);
     });
 
@@ -92,13 +92,21 @@ describe("Role-based discovery functions", () => {
       expect(db.bug.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            // A blocked or failed merge is still waiting on the admin merger.
-            reviewStatus: { in: ["ready_to_merge", "merge_blocked", "merge_failed"] },
+            // A blocked or failed merge is still waiting on the merger agent.
+            AND: [{ reviewStatus: { in: ["ready_to_merge", "merge_blocked", "merge_failed"] } }],
           }),
         }),
       );
       expect(issues).toHaveLength(1);
       expect(issues[0].reviewStatus).toBe("ready_to_merge");
+    });
+
+    it("matches submitted or not-yet-reviewed fixes without putting null inside `in`, which Prisma rejects", async () => {
+      db.bug.findMany.mockResolvedValue([]);
+      await findReadyToMergeIssues(merger, "p1", 50, "submitted");
+      const where = db.bug.findMany.mock.calls.at(-1)![0].where;
+      expect(where.AND).toEqual([{ OR: [{ reviewStatus: "submitted" }, { reviewStatus: null }] }]);
+      expect(JSON.stringify(where)).not.toMatch(/"in":\[[^\]]*null/);
     });
 
     it("keeps a blocked merge on the list so it can be tried again", async () => {
@@ -127,8 +135,9 @@ describe("Role-based discovery functions", () => {
   });
 
   describe("findReviewableIssues", () => {
-    it("enforces reviewer level permission", async () => {
-      await expect(findReviewableIssues(contributor, "p1")).rejects.toBeInstanceOf(AgentLevelError);
+    it("is open to every working agent", async () => {
+      db.bug.findMany.mockResolvedValue([]);
+      await expect(findReviewableIssues(contributor, "p1")).resolves.toEqual([]);
     });
 
     it("finds reviewable issues for validation and testing", async () => {
@@ -154,8 +163,9 @@ describe("Role-based discovery functions", () => {
   });
 
   describe("findTriageableIssues", () => {
-    it("enforces triager level permission", async () => {
-      await expect(findTriageableIssues(contributor, "p1")).rejects.toBeInstanceOf(AgentLevelError);
+    it("is open to every working agent", async () => {
+      db.bug.findMany.mockResolvedValue([]);
+      await expect(findTriageableIssues(contributor, "p1")).resolves.toEqual([]);
     });
 
     it("finds open issues needing triage", async () => {
@@ -184,8 +194,9 @@ describe("Role-based discovery functions", () => {
   });
 
   describe("findClaimableIssues", () => {
-    it("enforces contributor level permission", async () => {
-      await expect(findClaimableIssues({ ...contributor, level: "observer" }, "p1")).rejects.toBeInstanceOf(AgentLevelError);
+    it("is open to every working agent", async () => {
+      db.bug.findMany.mockResolvedValue([]);
+      await expect(findClaimableIssues(contributor, "p1")).resolves.toEqual([]);
     });
 
     it("finds confirmed issues available for bidding or claiming", async () => {

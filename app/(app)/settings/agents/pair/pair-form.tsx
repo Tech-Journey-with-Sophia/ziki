@@ -118,7 +118,7 @@ export function PairForm({
             code: formatPairingCode(initialCode),
             name: pending.name,
             model: pending.model,
-            level: pending.level ?? "contributor",
+            level: pending.level ?? "working",
             instructions: pending.instructions,
           }
         : null;

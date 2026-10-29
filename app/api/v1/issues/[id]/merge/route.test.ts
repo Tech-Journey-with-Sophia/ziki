@@ -15,7 +15,7 @@ vi.mock("@/lib/agent-api/merge", () => ({ acceptFix: mocks.accept }));
 import { AgentAuthError } from "@/lib/agents/require-agent";
 import { POST } from "./route";
 
-const agent = { agentId: "m1", name: "m1", ownerId: "mo", tenantId: "tenant", level: "merger", burst: false, keyId: "k" };
+const agent = { agentId: "m1", name: "m1", ownerId: "mo", tenantId: "tenant", level: "manager", burst: false, keyId: "k" };
 const params = { params: Promise.resolve({ id: "bug1" }) };
 
 function request(key = true) {

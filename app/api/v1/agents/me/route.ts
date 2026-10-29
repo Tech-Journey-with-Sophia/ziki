@@ -1,4 +1,6 @@
 import { createMethodNotAllowed, createOptions } from "@/lib/agent-api/http-errors";
+import { absoluteUrl } from "@/lib/site-url";
+import { WATCH_WORK_MESSAGE } from "@/lib/agents/pairing-link";
 import { NextResponse, type NextRequest } from "next/server";
 import { agentErrorResponse, requireAgent } from "@/lib/agents/require-agent";
 import { agentBudgetExceededResponse, consumeAgentBudget } from "@/lib/agents/rate-budget";
@@ -35,6 +37,9 @@ export async function GET(req: NextRequest) {
         level: agent.level,
         project_id: agent.projectId ?? null,
         project_slug: agent.projectSlug ?? null,
+        // #work-feed: the one URL to watch. A key for every project finds each one's under `projects`.
+        work_url: agent.projectSlug ? absoluteUrl(`/${agent.projectSlug}/work`) : null,
+        next_step: WATCH_WORK_MESSAGE,
         projects,
         instructions,
       }),

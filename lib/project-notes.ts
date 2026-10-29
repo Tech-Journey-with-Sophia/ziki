@@ -33,7 +33,7 @@ export async function agentNotesActor(agent: AgentContext, projectId: string): P
   return {
     userId: agent.ownerId, name: agent.name, tenantId: agent.tenantId, projectId, agent,
     // Existing organization authority and trusted admin merger grant; no new role.
-    canEdit: isOrganizationAdmin(membership.role, agent.ownerRole) || agent.level === "admin_merger",
+    canEdit: isOrganizationAdmin(membership.role, agent.ownerRole) || agent.level === "merger",
   };
 }
 

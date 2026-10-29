@@ -1,10 +1,12 @@
 /**
  * Ready-to-paste agent onboarding templates (#610).
  * Generates prompt blocks for Claude, ChatGPT, and copy-paste Node & Python pollers.
+ * Every one of them watches the project's work feed (GET /<project>/work), the
+ * one place work appears (#work-feed).
  * Never embeds secrets; all credentials are acquired dynamically via pairing.
  */
 
-import { OPEN_LINK_IF_YOU_CAN } from "@/lib/agents/pairing-link";
+import { OPEN_LINK_IF_YOU_CAN, WATCH_WORK_MESSAGE } from "@/lib/agents/pairing-link";
 
 export type TemplateParams = {
   origin: string;
@@ -49,11 +51,10 @@ Follow this setup to pair yourself with my account:
 
    {
      "name": "<Choose a descriptive agent name, e.g. Claude>",
-     "model": "Claude",
-     "level": "<observer | contributor | triager | reviewer — ask me which; omit for observer>"
+     "model": "Claude"
    }
 
-   - The \`level\` is optional and defaults to \`contributor\`. The owner can change it later in Settings → Agents.
+   - Leave \`level\` out: every agent joins as a working agent. A tenant admin can make it a manager or merger agent later in Settings → Agents.
 
 2. Show me the pairing code and link:
    From the response:
@@ -78,9 +79,12 @@ Follow this setup to pair yourself with my account:
    GET ${site}/api/v1/agents/me
    Header: Authorization: Bearer <api_key>
 
-   Confirm that the response returns your agent id, name, and project_id.
+   Confirm that the response returns your agent id, name, project_id and work_url.
 
-5. Read ${site}/llms.txt to learn how to poll ${site}/api/v1/events and work on assigned issues.`;
+5. Watch for work. ${WATCH_WORK_MESSAGE}
+   - Your work_url is in the GET /api/v1/agents/me response: ${site}/<project-slug>/work.
+   - Do the items where canAct is true. Items with canAct false need a higher class; leave them.
+   - Read ${site}/llms.txt for the details of each step.`;
 }
 
 /**
@@ -105,9 +109,9 @@ Execute the following flow to pair with my account:
 1. Initiate pairing via HTTP POST:
    URL: ${site}/api/v1/agents/pairing
    Headers: Content-Type: application/json
-   Body: {"name": "ChatGPT Assistant", "model": "GPT-4o", "level": "<observer | contributor | triager | reviewer — ask me which; omit for observer>"}
+   Body: {"name": "ChatGPT Assistant", "model": "GPT-4o"}
 
-   - The \`level\` is optional and defaults to \`contributor\`. The owner can change it later in Settings → Agents.
+   - Leave \`level\` out: every agent joins as a working agent. A tenant admin can make it a manager or merger agent later in Settings → Agents.
 
 2. Ask for my authorization:
    From the response:
@@ -125,9 +129,12 @@ Execute the following flow to pair with my account:
 4. Verify connection:
    GET ${site}/api/v1/agents/me
    Header: Authorization: Bearer <api_key>
-   Verify that your agent is active and report your agent id and level to me.
+   Verify that your agent is active and report your agent id, level and work_url to me.
 
-5. Review ${site}/llms.txt for details on fetching issues and polling events at ${site}/api/v1/events.`;
+5. Watch for work. ${WATCH_WORK_MESSAGE}
+   - Your work_url is in the GET /api/v1/agents/me response: ${site}/<project-slug>/work.
+   - Do the items where canAct is true. Items with canAct false need a higher class; leave them.
+   - Review ${site}/llms.txt for the details of each step.`;
 }
 
 /**
@@ -147,6 +154,9 @@ export function nodeScriptTemplate({
  * Site: ${site}
  * Project: ${pname}${pid ? ` (${pid})` : ""}
  * Run with: node agent.mjs
+ *
+ * Watches the project's work feed, the one place work appears, and prints
+ * each new item this agent can act on.
  */
 
 import fs from "node:fs";
@@ -178,8 +188,8 @@ async function pair() {
   console.log("Starting agent pairing with Ziki...");
   const init = await api("/api/v1/agents/pairing", {
     method: "POST",
-    // level defaults to "contributor"; owner can change it later in Settings → Agents
-    body: JSON.stringify({ name: "Node Poller", model: "Node.js", level: "contributor" }),
+    // every agent joins as a working agent; a team admin can grant manager or merger later
+    body: JSON.stringify({ name: "Node Poller", model: "Node.js" }),
   });
 
   console.log("\\n========================================================");
@@ -231,22 +241,44 @@ async function main() {
   const me = await api("/api/v1/agents/me", { headers: authHeaders });
   console.log(\`Connected as \${me.name} (ID: \${me.id}, Level: \${me.level})\`);
 
-  // 2. Long-poll events
-  let cursor = null;
-  console.log("Listening for work and events from Ziki...");
+  // 2. Watch the work feed. work_url comes from /agents/me; a key for every
+  //    project has none, so fall back to the project id.
+  const workUrl = me.work_url || (PROJECT_ID ? \`\${SITE}/\${PROJECT_ID}/work\` : null);
+  if (!workUrl) throw new Error("This key has no work_url. Set PROJECT_ID to your project id.");
+  console.log(\`Watching \${workUrl} for work...\`);
+
+  let etag = null;
+  let pollSeconds = 30;
+  let seen = new Set();
   while (true) {
+    let wait = pollSeconds;
     try {
-      const query = new URLSearchParams({ wait: "10" });
-      if (cursor) query.set("after", cursor);
-      const res = await api(\`/api/v1/events?\${query}\`, { headers: authHeaders });
-      cursor = res.cursor || cursor;
-      for (const event of res.events || []) {
-        console.log(\`[EVENT \${event.createdAt}] \${event.type}:\`, JSON.stringify(event.payload || {}));
+      const res = await fetch(workUrl, {
+        headers: { ...authHeaders, ...(etag ? { "If-None-Match": etag } : {}) },
+      });
+      if (res.status === 429) {
+        // The read budget is spent: wait as long as the server says.
+        wait = Number(res.headers.get("retry-after")) || 60;
+      } else if (res.status !== 304) {
+        // 304 means nothing changed since the last ETag.
+        if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
+        etag = res.headers.get("etag");
+        const feed = await res.json();
+        pollSeconds = wait = feed.pollAfterSeconds || 30;
+        const current = new Set();
+        for (const item of feed.items || []) {
+          current.add(item.key);
+          if (item.canAct && !seen.has(item.key)) {
+            console.log(\`[WORK] \${item.kind}: \${item.title}\`);
+            for (const action of item.actions || []) console.log(\`  \${action.name}: \${action.method} \${action.path}\`);
+          }
+        }
+        seen = current;
       }
     } catch (err) {
-      console.error("Polling error, retrying in 5s:", err.message);
-      await new Promise((r) => setTimeout(r, 5000));
+      console.error("Polling error:", err.message);
     }
+    await new Promise((r) => setTimeout(r, wait * 1000));
   }
 }
 
@@ -274,6 +306,9 @@ Ziki Agent Poller (Python 3)
 Site: ${site}
 Project: ${pname}${pid ? ` (${pid})` : ""}
 Run with: python3 agent.py
+
+Watches the project's work feed, the one place work appears, and prints
+each new item this agent can act on.
 """
 
 import json
@@ -308,10 +343,27 @@ def api(path, data=None, headers=None):
         raise RuntimeError(parsed.get("message") or parsed.get("error") or str(e)) from None
 
 
+def get_work(url, headers, etag):
+    """GET the work feed. Returns (status, etag, feed); a 304 has no feed."""
+    req_headers = dict(headers)
+    if etag:
+        req_headers["If-None-Match"] = etag
+    req = urllib.request.Request(url, headers=req_headers)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, resp.headers.get("ETag"), json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 304:
+            return 304, etag, None
+        if e.code == 429:
+            return 429, etag, {"retryAfter": int(e.headers.get("Retry-After") or 60)}
+        raise RuntimeError(f"HTTP {e.code}") from None
+
+
 def pair():
     print("Starting agent pairing with Ziki...")
-    # level defaults to "contributor"; owner can change it later in Settings → Agents
-    init = api("/api/v1/agents/pairing", data={"name": "Python Poller", "model": "Python", "level": "contributor"})
+    # every agent joins as a working agent; a team admin can grant manager or merger later
+    init = api("/api/v1/agents/pairing", data={"name": "Python Poller", "model": "Python"})
 
     user_code = init["user_code"]
     verify_url = init.get("verification_uri_complete") or init.get("verification_uri")
@@ -368,21 +420,37 @@ def main():
     me = api("/api/v1/agents/me", headers=headers)
     print(f"Connected as {me.get('name')} (ID: {me.get('id')}, Level: {me.get('level')})")
 
-    # 2. Long-poll events
-    cursor = None
-    print("Listening for work and events from Ziki...")
+    # 2. Watch the work feed. work_url comes from /agents/me; a key for every
+    #    project has none, so fall back to the project id.
+    work_url = me.get("work_url") or (f"{SITE}/{urllib.parse.quote(PROJECT_ID)}/work" if PROJECT_ID else None)
+    if not work_url:
+        raise RuntimeError("This key has no work_url. Set PROJECT_ID to your project id.")
+    print(f"Watching {work_url} for work...")
+
+    etag = None
+    poll_seconds = 30
+    seen = set()
     while True:
+        wait = poll_seconds
         try:
-            query = "?wait=10"
-            if cursor:
-                query += f"&after={urllib.parse.quote(cursor)}"
-            res = api(f"/api/v1/events{query}", headers=headers)
-            cursor = res.get("cursor") or cursor
-            for event in res.get("events", []):
-                print(f"[EVENT {event.get('createdAt')}] {event.get('type')}: {event.get('payload')}")
+            status, etag, feed = get_work(work_url, headers, etag)
+            if status == 429:
+                # The read budget is spent: wait as long as the server says.
+                wait = feed["retryAfter"]
+            elif status != 304:
+                # 304 means nothing changed since the last ETag.
+                poll_seconds = wait = feed.get("pollAfterSeconds") or 30
+                current = set()
+                for item in feed.get("items", []):
+                    current.add(item["key"])
+                    if item.get("canAct") and item["key"] not in seen:
+                        print(f"[WORK] {item.get('kind')}: {item.get('title')}")
+                        for action in item.get("actions", []):
+                            print(f"  {action.get('name')}: {action.get('method')} {action.get('path')}")
+                seen = current
         except Exception as e:
-            print(f"Polling error, retrying in 5s: {e}")
-            time.sleep(5)
+            print(f"Polling error: {e}")
+        time.sleep(wait)
 
 
 if __name__ == "__main__":

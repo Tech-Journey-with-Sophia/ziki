@@ -45,7 +45,7 @@ function bugRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function reviewer(id: string, ownerId: string, level: "observer" | "contributor" | "reviewer" | "merger" = "reviewer") {
+function reviewer(id: string, ownerId: string, level: "working" | "manager" | "merger" = "working") {
   return { agentId: id, name: id, ownerId, tenantId: "tenant_zedu", level, burst: false, keyId: `key-${id}` };
 }
 
@@ -82,9 +82,9 @@ describe("submitTestVerdict: who may verdict (#434)", () => {
     expect(await submitTestVerdict(reviewer("second-agent", "rob"), "bug1", { ...good, onBehalfOfUserId: "someone-else" })).toMatchObject({ status: 403, error: "not_independent" });
     expect(state.verdicts).toHaveLength(0);
   });
-  it("rejects a contributor before touching the issue", async () => {
-    const result = await submitTestVerdict(reviewer("c1", "cara", "contributor"), "bug1", good);
-    expect(result).toMatchObject({ status: 403, error: "insufficient_level" });
+  it("rejects an agent with no valid class before touching the issue", async () => {
+    const result = await submitTestVerdict(reviewer("c1", "cara", "observer" as never), "bug1", good);
+    expect(result).toMatchObject({ status: 403, error: "insufficient_level", message: "This agent can't report a test verdict." });
     expect(db.bug.findFirst).not.toHaveBeenCalled();
   });
 

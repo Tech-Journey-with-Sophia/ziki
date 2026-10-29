@@ -178,4 +178,19 @@ describe("middleware routing (#348)", () => {
     expect(res.status).not.toBe(307);
     expect(res.headers.get("location")).toBeNull();
   });
+
+  it("lets an agent with a key reach a project's work feed, and sends everyone else to sign in", () => {
+    const withKey = createMockReq({ pathname: "/ziki/work" });
+    withKey.headers.set("authorization", "Bearer ziki_abc");
+    expect(runMiddleware(withKey).headers.get("location")).toBeNull();
+
+    const guest = runMiddleware(createMockReq({ pathname: "/ziki/work" }));
+    expect(guest.status).toBe(307);
+    expect(guest.headers.get("location")).toContain("/login");
+
+    // A key opens only the work path, not other pages.
+    const page = createMockReq({ pathname: "/settings/agents" });
+    page.headers.set("authorization", "Bearer ziki_abc");
+    expect(runMiddleware(page).status).toBe(307);
+  });
 });

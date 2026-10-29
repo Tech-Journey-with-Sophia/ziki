@@ -28,12 +28,12 @@ const dispatcher = {
   name: "Dispatcher",
   ownerId: "owner",
   tenantId: "tenant",
-  level: "dispatcher" as const,
+  level: "manager" as const,
   burst: false,
   keyId: "key-disp",
 };
 
-const contributor = { ...dispatcher, level: "contributor" as const };
+const contributor = { ...dispatcher, level: "working" as const };
 
 const readyBug = {
   id: "bug-1",
@@ -59,13 +59,12 @@ beforeEach(() => {
 });
 
 describe("findReadyIssues", () => {
-  it("isolates dispatcher: merger does not inherit dispatch", async () => {
+  it("lets a merger agent dispatch, since it can do everything a manager can", async () => {
     const merger = { ...dispatcher, level: "merger" as const };
-    await expect(findReadyIssues(merger, "project-1")).rejects.toBeInstanceOf(AgentLevelError);
-    await expect(dispatchReadyIssues(merger, "project-1", { policy: "offer_only" })).rejects.toBeInstanceOf(AgentLevelError);
-    await expect(getDispatcherMetrics(merger, "project-1")).rejects.toBeInstanceOf(AgentLevelError);
+    db.bug.findMany.mockResolvedValue([]);
+    await expect(findReadyIssues(merger, "project-1")).resolves.toEqual([]);
   });
-  it("requires dispatcher level", async () => {
+  it("requires a manager agent", async () => {
     await expect(findReadyIssues(contributor, "project-1")).rejects.toBeInstanceOf(AgentLevelError);
   });
 
@@ -129,6 +128,12 @@ describe("findReadyIssues", () => {
     }));
   });
 
+  it("clamps non-finite limits to MAX_READY_ISSUES_LIMIT (#637)", async () => {
+    db.bug.findMany.mockResolvedValueOnce([]);
+    await findReadyIssues(dispatcher, "project-1", Number.POSITIVE_INFINITY);
+    expect(db.bug.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it("returns only confirmed issues at the upvote threshold", async () => {
     isConfirmed.mockResolvedValueOnce(false);
     expect(await findReadyIssues(dispatcher, "project-1")).toEqual([]);
@@ -185,7 +190,7 @@ describe("findReadyIssues", () => {
 });
 
 describe("dispatchReadyIssues", () => {
-  it("requires dispatcher level", async () => {
+  it("requires a manager agent", async () => {
     await expect(dispatchReadyIssues(contributor, "project-1")).rejects.toBeInstanceOf(AgentLevelError);
   });
 

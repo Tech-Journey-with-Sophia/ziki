@@ -36,20 +36,21 @@ export async function findReadyToMergeIssues(
   limit = 50,
   reviewStatusFilter?: string | null,
 ): Promise<ReadyToMergeIssue[]> {
-  requireLevel(agent, "merger");
+  requireLevel(agent, "manager");
   const { verdictsNeeded } = await workflowFor(projectId);
 
-  let reviewStatusCondition: Prisma.StringNullableFilter | string | undefined;
+  // Prisma can't match null inside `in`, so "submitted or not reviewed yet" is an OR.
+  let reviewStatusCondition: Prisma.BugWhereInput;
   if (reviewStatusFilter === "ready_to_merge") {
-    reviewStatusCondition = { in: AWAITING_MERGE };
+    reviewStatusCondition = { reviewStatus: { in: AWAITING_MERGE } };
   } else if (reviewStatusFilter === "submitted") {
-    reviewStatusCondition = { in: ["submitted", null] } as unknown as Prisma.StringNullableFilter;
+    reviewStatusCondition = { OR: [{ reviewStatus: "submitted" }, { reviewStatus: null }] };
   } else if (reviewStatusFilter === "all") {
-    reviewStatusCondition = { not: "rejected" };
-  } else if (agent.level === "admin_merger") {
-    reviewStatusCondition = { in: AWAITING_MERGE };
+    reviewStatusCondition = { reviewStatus: { not: "rejected" } };
+  } else if (agent.level === "merger") {
+    reviewStatusCondition = { reviewStatus: { in: AWAITING_MERGE } };
   } else {
-    reviewStatusCondition = { not: "rejected" };
+    reviewStatusCondition = { reviewStatus: { not: "rejected" } };
   }
 
   const candidates = await prisma.bug.findMany({
@@ -58,8 +59,8 @@ export async function findReadyToMergeIssues(
       projectId,
       isDeleted: false,
       status: { in: ["open", "in_progress"] },
-      reviewStatus: reviewStatusCondition,
       pullRequestUrl: { not: null },
+      AND: [reviewStatusCondition],
       OR: [
         { reviewStatus: { in: AWAITING_MERGE } },
         {

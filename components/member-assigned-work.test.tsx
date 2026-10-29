@@ -27,7 +27,7 @@ describe("MemberAssignedWork (Ziki #447)", () => {
   });
 
   it("puts the count on an agent's Current work heading", () => {
-    const agent = { id: "a1", name: "Ada's agent", model: null, level: "contributor" as const, online: true, acceptedFixes: 0, currentWork: [work("x"), work("y")] };
+    const agent = { id: "a1", name: "Ada's agent", model: null, level: "working" as const, online: true, acceptedFixes: 0, currentWork: [work("x"), work("y")] };
     expect(renderToStaticMarkup(<TeamAgentList agents={[agent]} />)).toContain("Current work (2)");
   });
 });

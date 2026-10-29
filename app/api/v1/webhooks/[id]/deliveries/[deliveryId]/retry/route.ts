@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; deliveryId: string }> },
 ) {
   const { id, deliveryId } = await params;
-  return agentIssueRequest(request, "webhooks.retryDelivery", "contributor", deliveryId, async (agent) => {
+  return agentIssueRequest(request, "webhooks.retryDelivery", "working", deliveryId, async (agent) => {
     try {
       const result = await retryDelivery(prisma, agent.agentId, id, deliveryId);
       if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });

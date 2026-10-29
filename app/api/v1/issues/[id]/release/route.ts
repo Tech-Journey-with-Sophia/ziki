@@ -13,7 +13,7 @@ import { releaseClaim, releaseSchema } from "@/lib/agent-api/offer";
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "claims.release", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "claims.release", "working", id, async (agent) => {
     const raw = request.headers.get("content-length") === "0" ? {} : await issueJson(request).catch(() => ({}));
     const parsed = releaseSchema.safeParse(raw ?? {});
     if (!parsed.success) return NextResponse.json({ error: "Invalid release request." }, { status: 400 });

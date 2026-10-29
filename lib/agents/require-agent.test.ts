@@ -29,7 +29,7 @@ function keyRow(overrides: {
       name: "Ada's Claude",
       ownerUserId: "ada",
       tenantId: "tenant_zedu",
-      level: "contributor",
+      level: "working",
       burst: false,
       revokedAt: null,
       owner: { role: "user", memberships: [{ tenantId: "tenant_zedu" }] },
@@ -82,7 +82,7 @@ describe("requireAgent (#427)", () => {
       name: "Ada's Claude",
       ownerId: "ada",
       tenantId: "tenant_zedu",
-      level: "contributor",
+      level: "working",
       ownerRole: "user",
       burst: false,
       burstUntil: null,
@@ -151,9 +151,9 @@ describe("agentErrorResponse", () => {
     const unauthorized = agentErrorResponse(new AgentAuthError("missing_key"));
     expect(unauthorized.status).toBe(401);
     expect(unauthorized.headers.get("WWW-Authenticate")).toContain("Bearer");
-    const forbidden = agentErrorResponse(new AgentLevelError("reviewer"));
+    const forbidden = agentErrorResponse(new AgentLevelError("manager"));
     expect(forbidden.status).toBe(403);
-    expect(await forbidden.json()).toMatchObject({ error: "insufficient_level", required: "reviewer" });
+    expect(await forbidden.json()).toMatchObject({ error: "insufficient_level", required: "manager", message: "This needs a manager agent." });
   });
 
   it("rethrows anything else", () => {

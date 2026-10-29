@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const agent = {
-    agentId: "agent-1", ownerId: "owner-1", tenantId: "tenant-1", level: "contributor",
+    agentId: "agent-1", ownerId: "owner-1", tenantId: "tenant-1", level: "working",
     burst: false, keyId: "key-1", name: "Tester",
   };
   return {
@@ -41,7 +41,7 @@ describe("POST /api/v1/missions/:id/covered (#619)", () => {
     const response = await POST(request, context);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ covered: true, issuesFiled: 2 });
-    expect(mocks.agentIssueRequest).toHaveBeenCalledWith(request, "missions.covered", "contributor", "mission:mission-1", expect.any(Function));
+    expect(mocks.agentIssueRequest).toHaveBeenCalledWith(request, "missions.covered", "working", "mission:mission-1", expect.any(Function));
     expect(mocks.coverTestMission).toHaveBeenCalledWith(mocks.agent, "project-1", "mission-1", 2);
   });
 

@@ -5,7 +5,7 @@ import { bidSchema, listBids, placeBid, withdrawBid } from "@/lib/agent-api/bid"
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.bids", "observer", id, async (agent) => {
+  return agentIssueRequest(request, "issues.bids", "read", id, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     const bids = await listBids(agent, scope.projectId, id);
     return NextResponse.json({
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.bid", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "issues.bid", "working", id, async (agent) => {
     const parsed = bidSchema.safeParse(await issueJson(request));
     if (!parsed.success) return NextResponse.json({ error: "Invalid bid request." }, { status: 400 });
     if (!request.nextUrl.searchParams.get("projectId") && !parsed.data.projectId) {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.bid_withdraw", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "issues.bid_withdraw", "working", id, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     const bid = await withdrawBid(agent, scope.projectId, id);
     return NextResponse.json({ bid_id: bid.id, status: "withdrawn" });

@@ -3,7 +3,6 @@ import { logger } from "@/lib/logger";
 import { sweepExpiredOffers } from "@/lib/agent-api/offer";
 import { sweepJobReviewOffers } from "@/lib/jobs/review";
 import { sweepStaleClaims } from "@/lib/agent-api/availability";
-import { sweepLevelPromotions } from "@/lib/agents/promotion";
 import { dispatchDueDeliveries } from "@/lib/webhooks/deliver";
 import { pruneAgentRows, type AgentRetentionCounts } from "@/lib/agent-retention";
 import { sweepOrphanedAttachments } from "@/lib/attachment-retention";
@@ -48,7 +47,6 @@ export type PlatformSweepsResult = {
     claims: { status: "ok" | "error"; released?: number; offered?: number; error?: string };
     orphanedIssues: { status: "ok" | "error"; reopened?: number; error?: string };
     bids: { status: "ok" | "error"; invited?: number; assigned?: number; lapsed?: number; error?: string };
-    promotions: { status: "ok" | "error"; promoted?: number; demoted?: number; error?: string };
     deliveries: { status: "ok" | "error"; processed?: number; error?: string };
     retention: {
       status: "ok" | "error";
@@ -66,7 +64,6 @@ let sweepInProgress = false;
  * - Job-review offer expiry and recovery
  * - Stale claim release (inactivity & deadline)
  * - Reopen unassigned in-progress issues without live claims or linked fixes
- * - Level promotions and silence demotions
  * - Webhook dispatch (lease-guarded)
  * - Retention prunes (agent rows & orphaned attachments)
  *
@@ -88,7 +85,6 @@ export async function runPlatformSweeps(): Promise<PlatformSweepsResult | { skip
         claims: { status: "ok" },
         orphanedIssues: { status: "ok" },
         bids: { status: "ok" },
-        promotions: { status: "ok" },
         deliveries: { status: "ok" },
         retention: { status: "ok" },
       },
@@ -155,16 +151,6 @@ export async function runPlatformSweeps(): Promise<PlatformSweepsResult | { skip
       };
     }
 
-    // 3. Level Promotions / Demotions
-    try {
-      const res = await sweepLevelPromotions();
-      recordSweepSuccess("promotions");
-      result.sweeps.promotions = { status: "ok", promoted: res.promoted, demoted: res.demoted };
-    } catch (err) {
-      recordSweepFailure("promotions", err);
-      result.sweeps.promotions = { status: "error", error: err instanceof Error ? err.message : String(err) };
-    }
-
     // 4. Webhook Deliveries
     try {
       const processed = await dispatchDueDeliveries();
@@ -198,7 +184,6 @@ export async function runPlatformSweeps(): Promise<PlatformSweepsResult | { skip
       jobReviewOffers: result.sweeps.jobReviewOffers,
       claims: result.sweeps.claims,
       orphanedIssues: result.sweeps.orphanedIssues,
-      promotions: result.sweeps.promotions,
       deliveries: result.sweeps.deliveries,
       retention: result.sweeps.retention,
     });

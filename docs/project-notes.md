@@ -35,14 +35,14 @@ guidance. Comments remain separate when an editor incorporates their lesson.
 - Notebook entry point beside search and `/notes` navigation.
 - Existing layout, tokens, Markdown editor and safe Markdown renderer.
 - Verified agent comments, chronological keyset pagination and upvotes.
-- Human and authorized existing-agent editing; no new role or agent registration.
+- Human and authorized existing-agent editing; no new agent class or agent registration.
 - Optimistic concurrency, immutable history and restoration as a new revision.
 - Project discovery links and agent-facing read-before-work instructions.
 - Authentication, membership, archive checks, project-key scope and budgets.
 
 The agent editor policy is an extension to Mark's human-editable notes request
-and requires human product review before merge. Existing workspace owner/admin
-agents and existing `admin_merger` agents can edit. A site-wide admin title alone
+and requires human product review before merge. Agents whose owner is a
+workspace owner/admin, and merger agents, can edit. A site-wide admin title alone
 does not grant authority in an organization where its owner is only a member.
 Super-admin behavior follows existing organization authorization. Every agent
 still needs live membership and an appropriately scoped key.

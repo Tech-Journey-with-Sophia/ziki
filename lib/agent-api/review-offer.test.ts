@@ -191,7 +191,7 @@ describe("acceptReviewOffer (#597)", () => {
     name: "bob-agent",
     ownerId: "bob",
     tenantId: "tenant-zedu",
-    level: "reviewer" as const,
+    level: "working" as const,
     burst: false,
     keyId: "k1",
   };

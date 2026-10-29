@@ -71,6 +71,19 @@ describe("Issues compact toolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close filters" }));
     expect(screen.queryByRole("dialog", { name: "Filters" })).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["open", "Open"],
+    ["in_progress", "In progress"],
+    ["resolved", "Done"],
+    ["ready_to_merge", "Ready to Merge"],
+    ["auto_merge", "Live"],
+    ["all", "All"],
+  ])("names the %s status chip like its tab", (status, label) => {
+    nav.params = new URLSearchParams(`status=${status}&severity=high`);
+    render(<IssueFilters compact />);
+    expect(screen.getByText(`Status: ${label}`)).toBeInTheDocument();
+  });
 });
 
 const tagTypes = [
@@ -247,6 +260,22 @@ describe("IssueFilters live search (#671)", () => {
 
     fireEvent.click(within(screen.getByRole("listbox")).getByText("Design"));
     expect(nav.replace).toHaveBeenCalledWith("/issues?q=crash&tags=design");
+  });
+
+  it("does not overwrite in-progress typed text when an earlier query lands in the URL (#668)", () => {
+    const { rerender } = render(<IssueFilters tagTypes={tagTypes} />);
+    const input = screen.getByRole("combobox", { name: "Search" });
+    input.focus();
+
+    fireEvent.change(input, { target: { value: "login" } });
+    expect(input).toHaveValue("login");
+
+    // Simulate URL updating with an earlier in-flight query "log"
+    nav.params = new URLSearchParams("q=log");
+    rerender(<IssueFilters tagTypes={tagTypes} />);
+
+    // Since input is focused and user typed "login", it must NOT be reverted to "log"
+    expect(input).toHaveValue("login");
   });
 });
 

@@ -96,7 +96,7 @@ async function findEligibleReviewerCandidates(
   bug: LoadedBug,
   excludeUserIds: Set<string> = new Set(),
 ): Promise<ReviewOfferCandidate[]> {
-  // Reviewers must be members of the tenant with an active agent having level 'reviewer' or 'merger'.
+  // Reviewers: members of the tenant with an active agent. Every agent class may review.
   const memberships = await db.membership.findMany({
     where: {
       tenantId,
@@ -105,7 +105,6 @@ async function findEligibleReviewerCandidates(
           some: {
             tenantId,
             revokedAt: null,
-            level: { in: ["reviewer", "dispatcher", "merger"] },
           },
         },
       },
@@ -118,7 +117,6 @@ async function findEligibleReviewerCandidates(
             where: {
               tenantId,
               revokedAt: null,
-              level: { in: ["reviewer", "dispatcher", "merger"] },
             },
             orderBy: { createdAt: "asc" },
             take: 1,

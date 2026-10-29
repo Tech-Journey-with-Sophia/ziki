@@ -34,7 +34,7 @@ const agent: AgentContext = {
   name: "Claude",
   ownerId: "owner",
   tenantId: "t1",
-  level: "contributor",
+  level: "working",
   burst: false,
   keyId: "k1",
 };

@@ -1,496 +1,82 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  agent: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-  issueValidation: { findMany: vi.fn() },
-  issueClaim: { count: vi.fn() },
-  agentAuditEvent: { create: vi.fn(), findMany: vi.fn() },
+  agent: { findUnique: vi.fn(), update: vi.fn() },
+  agentAuditEvent: { create: vi.fn() },
   membership: { findUnique: vi.fn() },
-  project: { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-const notifications = vi.hoisted(() => ({ notifyReviewerEligible: vi.fn() }));
-vi.mock("@/lib/agent-notifications", () => notifications);
-
-const auth = vi.hoisted(() => ({ requireSuperAdmin: vi.fn() }));
-vi.mock("@/lib/auth-helpers", () => ({ requireSuperAdmin: auth.requireSuperAdmin }));
-
-import {
-  EARNED_REVIEWER_VALIDATIONS,
-  SILENCE_DEMOTION_RELEASES,
-  demoteFromSilence,
-  grantLevelByAdmin,
-  promoteEarnedReviewer,
-  runLevelPromotions,
-  silenceReleases,
-  standingValidations,
-} from "./promotion";
+import { grantLevelByAdmin } from "./promotion";
 
 const admin = { id: "admin-1", role: "user" as const };
 const owner = { id: "owner-1", role: "user" as const };
 
-let nextValId = 1;
-
-/** One validation row, independent (standing) by default. */
-function validation(overrides: Record<string, unknown> = {}) {
-  return {
-    id: `val-${nextValId++}`,
-    agent: { id: "a1", ownerUserId: "owner-1" },
-    bug: {
-      createdByAgentId: null,
-      beneficiaryUserId: "someone-else",
-      createdByAgent: null,
-      claims: [],
-    },
-    ...overrides,
-  };
-}
-
 function agentRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "a1",
-    tenantId: "t1",
-    ownerUserId: "owner-1",
-    name: "Agent A",
-    level: "contributor",
-    levelChangedAt: null,
-    reviewerEligibilityNotifiedAt: null,
-    ...overrides,
-  };
+  return { id: "a1", tenantId: "t1", level: "working", ...overrides };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  nextValId = 1;
   db.agent.findUnique.mockResolvedValue(agentRow());
-  db.agent.findMany.mockResolvedValue([]);
   db.agent.update.mockResolvedValue({});
-  db.agent.updateMany.mockResolvedValue({ count: 1 });
-  db.issueValidation.findMany.mockResolvedValue([]);
-  db.issueClaim.count.mockResolvedValue(0);
   db.agentAuditEvent.create.mockResolvedValue({});
-  db.agentAuditEvent.findMany.mockResolvedValue([]);
   db.membership.findUnique.mockResolvedValue({ role: "member" });
-  db.project.findUnique.mockResolvedValue({ tenantId: "t1" });
-  auth.requireSuperAdmin.mockResolvedValue({ id: "super", role: "super_admin" });
-});
-
-describe("standingValidations (#451)", () => {
-  it("counts only the validations the independence rule still allows", async () => {
-    db.issueValidation.findMany.mockResolvedValue([
-      validation(),
-      // Same owner as the beneficiary: not independent.
-      validation({ bug: { createdByAgentId: null, beneficiaryUserId: "owner-1", createdByAgent: null, claims: [] } }),
-    ]);
-
-    expect(await standingValidations("a1")).toBe(1);
-  });
-
-  it("re-checks every independence conflict that review time checks (#598)", async () => {
-    db.issueValidation.findMany.mockResolvedValue([
-      validation(),
-      // The reviewer's owner filed the report.
-      validation({
-        bug: { createdByAgentId: null, reporterId: "owner-1", beneficiaryUserId: "x", createdByAgent: null, claims: [] },
-      }),
-      // The reviewer's owner is the assigned solver.
-      validation({
-        bug: { createdByAgentId: null, assigneeId: "owner-1", beneficiaryUserId: "x", createdByAgent: null, claims: [] },
-      }),
-      // The reviewer's owner is the active claim's beneficiary.
-      validation({
-        bug: {
-          createdByAgentId: null,
-          beneficiaryUserId: "x",
-          createdByAgent: null,
-          claims: [{ status: "active", releasedAt: null, beneficiaryUserId: "owner-1", dispatcherUserId: null, agent: { ownerUserId: "someone-else" } }],
-        },
-      }),
-      // The reviewer's owner is the active claim's dispatcher.
-      validation({
-        bug: {
-          createdByAgentId: null,
-          beneficiaryUserId: "x",
-          createdByAgent: null,
-          claims: [{ status: "active", releasedAt: null, beneficiaryUserId: "someone-else", dispatcherUserId: "owner-1", agent: { ownerUserId: "someone-else" } }],
-        },
-      }),
-    ]);
-
-    expect(await standingValidations("a1")).toBe(1);
-  });
-
-  it("only reads validations that judge an issue, never `format` rows (#590)", async () => {
-    await standingValidations("a1");
-
-    expect(db.issueValidation.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { agentId: "a1", kind: { in: ["real", "duplicate", "fix"] } } }),
-    );
-  });
-
-  it("skips a validation by the agent that filed the issue", async () => {
-    db.issueValidation.findMany.mockResolvedValue([
-      validation(),
-      validation({ bug: { createdByAgentId: "a1", beneficiaryUserId: "x", createdByAgent: null, claims: [] } }),
-    ]);
-
-    expect(await standingValidations("a1")).toBe(1);
-  });
-
-  it("excludes validations that were undone by an admin (#623)", async () => {
-    db.issueValidation.findMany.mockResolvedValue([
-      validation({ id: "val-1" }),
-      validation({ id: "val-2" }),
-      validation({ id: "val-3" }),
-    ]);
-    db.agentAuditEvent.findMany.mockResolvedValue([
-      { payload: { validationId: "val-2" } },
-    ]);
-
-    expect(await standingValidations("a1")).toBe(2);
-    expect(db.agentAuditEvent.findMany).toHaveBeenCalledWith({
-      where: { agentId: "a1", action: "issue.validated", undoneAt: { not: null } },
-      select: { payload: true },
-    });
-  });
-});
-
-describe("promoteEarnedReviewer (#451)", () => {
-  it("does not promote on the ninth standing validation", async () => {
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS - 1 }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 9 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-  });
-
-  it("promotes an observer to reviewer once at ten", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "observer" }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: true, standing: 10 });
-    expect(db.agent.updateMany).toHaveBeenCalledWith({ where: { id: "a1", level: "observer" }, data: { level: "reviewer", levelChangedAt: expect.any(Date) } });
-    expect(db.agentAuditEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: "agent.promoted",
-          payload: { from: "observer", to: "reviewer", validations: 10 },
-        }),
-      }),
-    );
-  });
-
-  it("keeps a contributor's role and tells its owner once it reaches ten (#659)", async () => {
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 10 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-    expect(db.agent.updateMany).toHaveBeenCalledWith({
-      where: { id: "a1", level: "contributor", reviewerEligibilityNotifiedAt: null },
-      data: { reviewerEligibilityNotifiedAt: expect.any(Date) },
-    });
-    expect(db.agentAuditEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: "agent.reviewer_eligible",
-          target: "agent:a1",
-          payload: { validations: 10 },
-        }),
-      }),
-    );
-    expect(notifications.notifyReviewerEligible).toHaveBeenCalledWith({
-      agent: { name: "Agent A" },
-      ownerUserId: "owner-1",
-      tenantId: "t1",
-    });
-  });
-
-  it("does not promote or notify a contributor again after the owner resets its role", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ reviewerEligibilityNotifiedAt: new Date() }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS + 1 }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 11 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-    expect(db.agent.updateMany).not.toHaveBeenCalled();
-    expect(notifications.notifyReviewerEligible).not.toHaveBeenCalled();
-  });
-
-  it("does not notify when another call has already claimed the eligibility notice", async () => {
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-    db.agent.updateMany.mockResolvedValue({ count: 0 });
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 10 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-    expect(notifications.notifyReviewerEligible).not.toHaveBeenCalled();
-  });
-
-  it("never promotes a triager, however many validations it has (#542)", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "triager" }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS * 3 }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 0 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-    expect(db.agentAuditEvent.create).not.toHaveBeenCalled();
-  });
-
-  it("does not promote an agent when undone validations drop the count below ten (#623)", async () => {
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: 10 }, (_, i) => validation({ id: `val-${i + 1}` })),
-    );
-    db.agentAuditEvent.findMany.mockResolvedValue([
-      { payload: { validationId: "val-1" } },
-      { payload: { validationId: "val-4" } },
-      { payload: { validationId: "val-7" } },
-    ]);
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 7 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-  });
-
-  it("leaves an agent already at reviewer or above alone", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "reviewer" }));
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 0 });
-    expect(db.issueValidation.findMany).not.toHaveBeenCalled();
-    expect(db.agent.update).not.toHaveBeenCalled();
-  });
-
-  it("never auto-promotes a manually assigned triager, even with ten standing validations (#645)", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "triager" }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 0 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-    expect(db.agentAuditEvent.create).not.toHaveBeenCalled();
-  });
-
-  it("leaves dispatcher and merger untouched the same way (#645)", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "dispatcher" }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-
-    const dispatcher = await promoteEarnedReviewer("a1");
-    expect(dispatcher).toEqual({ ok: true, changed: false, standing: 0 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "merger" }));
-    const merger = await promoteEarnedReviewer("a1");
-    expect(merger).toEqual({ ok: true, changed: false, standing: 0 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-  });
-
-  it("still promotes an observer once the threshold is met (#645 keeps the default track)", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "observer" }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: true, standing: 10 });
-    expect(db.agent.updateMany).toHaveBeenCalledWith({
-      where: { id: "a1", level: "observer" },
-      data: { level: "reviewer", levelChangedAt: expect.any(Date) },
-    });
-    expect(db.agentAuditEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: "agent.promoted",
-          payload: { from: "observer", to: "reviewer", validations: 10 },
-        }),
-      }),
-    );
-  });
-
-  it("does not overwrite a level assigned concurrently during promotion (compare-and-update)", async () => {
-    // The sweep read `contributor`, but an owner assigned `triager` before the
-    // write: updateMany matches 0 rows and the manual level wins, silently.
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "contributor" }));
-    db.issueValidation.findMany.mockResolvedValue(
-      Array.from({ length: EARNED_REVIEWER_VALIDATIONS }, () => validation()),
-    );
-    db.agent.updateMany.mockResolvedValue({ count: 0 });
-
-    const result = await promoteEarnedReviewer("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, standing: 10 });
-    expect(db.agentAuditEvent.create).not.toHaveBeenCalled();
-  });
-});
-
-describe("silenceReleases / demoteFromSilence (#451)", () => {
-  it("counts silence and missed-deadline releases inside the seven-day window", async () => {
-    const now = new Date("2026-10-19T12:00:00.000Z");
-    await silenceReleases("a1", undefined, now);
-
-    const where = db.issueClaim.count.mock.calls[0][0].where;
-    expect(where.releaseReason).toEqual({ in: ["silence", "deadline"] });
-    expect(where.releasedAt.gte).toEqual(new Date("2026-10-12T12:00:00.000Z"));
-  });
-
-  it("counts only releases after the last level change (#390)", async () => {
-    const now = new Date("2026-10-19T12:00:00.000Z");
-    const restored = new Date("2026-10-17T09:00:00.000Z");
-    // Restored two days ago: newer than the window start, older than `now`.
-    db.agent.findUnique.mockResolvedValue(agentRow({ levelChangedAt: restored }));
-    await silenceReleases("a1", undefined, now);
-
-    const where = db.issueClaim.count.mock.calls[0][0].where;
-    expect(where.releasedAt.gte).toEqual(restored);
-  });
-
-  it("keeps the window when the level change is older than it (#390)", async () => {
-    const now = new Date("2026-10-19T12:00:00.000Z");
-    db.agent.findUnique.mockResolvedValue(agentRow({ levelChangedAt: new Date("2026-10-01T00:00:00.000Z") }));
-    await silenceReleases("a1", undefined, now);
-
-    const where = db.issueClaim.count.mock.calls[0][0].where;
-    expect(where.releasedAt.gte).toEqual(new Date("2026-10-12T12:00:00.000Z"));
-  });
-
-  it("does not demote on two silence releases", async () => {
-    db.issueClaim.count.mockResolvedValue(SILENCE_DEMOTION_RELEASES - 1);
-
-    const result = await demoteFromSilence("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, releases: 2 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-  });
-
-  it("leaves a just-restored contributor alone: releases before the restore do not count (#390)", async () => {
-    // The old three strikes happened before the owner restored the agent, so
-    // the sweep's count (now filtered to post-restore releases) is zero.
-    db.issueClaim.count.mockResolvedValue(0);
-
-    const result = await demoteFromSilence("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, releases: 0 });
-    expect(db.agent.update).not.toHaveBeenCalled();
-    expect(db.agentAuditEvent.create).not.toHaveBeenCalled();
-  });
-
-  it("demotes a contributor to observer at three silence releases", async () => {
-    db.issueClaim.count.mockResolvedValue(SILENCE_DEMOTION_RELEASES);
-
-    const result = await demoteFromSilence("a1");
-
-    expect(result).toEqual({ ok: true, changed: true, releases: 3 });
-    expect(db.agent.update).toHaveBeenCalledWith({ where: { id: "a1" }, data: { level: "observer", levelChangedAt: expect.any(Date) } });
-    expect(db.agentAuditEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: "agent.demoted",
-          payload: { from: "contributor", to: "observer", reason: "silence", releases: 3 },
-        }),
-      }),
-    );
-  });
-
-  it("never demotes a reviewer (or a merger)", async () => {
-    db.agent.findUnique.mockResolvedValue(agentRow({ level: "merger" }));
-
-    const result = await demoteFromSilence("a1");
-
-    expect(result).toEqual({ ok: true, changed: false, releases: 0 });
-    expect(db.issueClaim.count).not.toHaveBeenCalled();
-    expect(db.agent.update).not.toHaveBeenCalled();
-  });
 });
 
 describe("grantLevelByAdmin (#451)", () => {
-  it("rejects an owner who is not a tenant admin granting merger", async () => {
-    db.membership.findUnique.mockResolvedValue({ role: "member" });
+  it.each(["manager", "merger"] as const)("rejects an owner who is not a tenant admin making an agent a %s", async (level) => {
+    const result = await grantLevelByAdmin({ actor: owner, agentId: "a1", level, reason: "trusted" });
 
-    const result = await grantLevelByAdmin({ actor: owner, agentId: "a1", level: "merger", reason: "trusted" });
-
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({ ok: false, error: `Only a team admin can make an agent a ${level} agent.` });
     expect(db.agent.update).not.toHaveBeenCalled();
   });
 
-  it("lets a tenant admin grant merger, recording the admin and the reason", async () => {
+  it.each(["manager", "merger"] as const)("lets a tenant admin make an agent a %s, recording the admin and the reason", async (level) => {
     db.membership.findUnique.mockResolvedValue({ role: "admin" });
 
-    const result = await grantLevelByAdmin({ actor: admin, agentId: "a1", level: "merger", reason: "field lead" });
+    const result = await grantLevelByAdmin({ actor: admin, agentId: "a1", level, reason: "field lead" });
 
     expect(result).toEqual({ ok: true, changed: true });
-    expect(db.agent.update).toHaveBeenCalledWith({ where: { id: "a1" }, data: { level: "merger", levelChangedAt: expect.any(Date) } });
+    expect(db.agent.update).toHaveBeenCalledWith({ where: { id: "a1" }, data: { level, levelChangedAt: expect.any(Date) } });
     expect(db.agentAuditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           action: "agent.level_changed",
           actorUserId: "admin-1",
-          payload: expect.objectContaining({ to: "merger", reason: "field lead" }),
+          payload: expect.objectContaining({ from: "working", to: level, by: "tenant_admin", reason: "field lead" }),
         }),
       }),
     );
   });
 
-  it("requires a reason to make a merger", async () => {
+  it.each(["manager", "merger"] as const)("requires a reason to make an agent a %s", async (level) => {
     db.membership.findUnique.mockResolvedValue({ role: "admin" });
 
-    const result = await grantLevelByAdmin({ actor: admin, agentId: "a1", level: "merger", reason: "  " });
+    const result = await grantLevelByAdmin({ actor: admin, agentId: "a1", level, reason: "  " });
 
     expect(result.ok).toBe(false);
     expect(db.agent.update).not.toHaveBeenCalled();
   });
 
-  it("lets a tenant admin grant reviewer by hand", async () => {
+  it("lets a tenant admin move an agent back to working without a reason", async () => {
     db.membership.findUnique.mockResolvedValue({ role: "owner" });
+    db.agent.findUnique.mockResolvedValue(agentRow({ level: "manager" }));
 
-    const result = await grantLevelByAdmin({ actor: admin, agentId: "a1", level: "reviewer", reason: "earned elsewhere" });
-
-    expect(result).toEqual({ ok: true, changed: true });
-    expect(db.agent.update).toHaveBeenCalledWith({ where: { id: "a1" }, data: { level: "reviewer", levelChangedAt: expect.any(Date) } });
-  });
-});
-
-describe("runLevelPromotions (#451)", () => {
-  it("sweeps the project's agents for promotions and silence demotions", async () => {
-    db.agent.findMany.mockResolvedValue([{ id: "a1" }, { id: "a2" }]);
-    db.issueValidation.findMany.mockResolvedValue([]);
-    db.issueClaim.count.mockResolvedValue(SILENCE_DEMOTION_RELEASES);
-
-    const result = await runLevelPromotions("project-1");
-
-    expect(auth.requireSuperAdmin).toHaveBeenCalled();
-    expect(result).toEqual({ promoted: 0, demoted: 2 });
+    expect(await grantLevelByAdmin({ actor: admin, agentId: "a1", level: "working", reason: "" })).toEqual({ ok: true, changed: true });
   });
 
-  it("throws when the project does not exist", async () => {
-    db.project.findUnique.mockResolvedValue(null);
-    await expect(runLevelPromotions("nope")).rejects.toThrow("Project not found.");
+  it("changes nothing when the agent already has that class", async () => {
+    db.membership.findUnique.mockResolvedValue({ role: "admin" });
+    db.agent.findUnique.mockResolvedValue(agentRow({ level: "merger" }));
+
+    expect(await grantLevelByAdmin({ actor: admin, agentId: "a1", level: "merger", reason: "again" })).toEqual({ ok: true, changed: false });
+    expect(db.agent.update).not.toHaveBeenCalled();
+    expect(db.agentAuditEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("reports a missing agent", async () => {
+    db.agent.findUnique.mockResolvedValue(null);
+    expect(await grantLevelByAdmin({ actor: admin, agentId: "nope", level: "manager", reason: "x" })).toEqual({ ok: false, error: "Agent not found." });
   });
 });

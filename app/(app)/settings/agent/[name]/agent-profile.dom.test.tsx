@@ -9,7 +9,7 @@ const agent: AgentProfileData = {
   id: "agent_1",
   name: "Pixel",
   model: "Claude",
-  level: "contributor",
+  level: "working",
   revokedAt: null,
   createdAt: new Date("2026-10-01T10:00:00Z"),
   ownerName: null,
@@ -23,7 +23,7 @@ describe("AgentProfileCard", () => {
     render(<AgentProfileCard agent={agent} title={<h1>Pixel</h1>} />);
     expect(screen.getByRole("heading", { name: "Pixel" })).toBeTruthy();
     expect(screen.getByTestId("agent-avatar")).toBeTruthy();
-    expect(screen.getByText("Contributor")).toBeTruthy();
+    expect(screen.getByText("Working agent")).toBeTruthy();
     expect(screen.getByText("Active")).toBeTruthy();
     expect(screen.getByText("Claude")).toBeTruthy();
     expect(screen.getByText("You")).toBeTruthy();

@@ -20,7 +20,7 @@ vi.mock("@/lib/redesigns", () => ({ assertRedesignOpen: vi.fn() }));
 
 import { releaseClaim } from "./offer";
 
-const agent = { agentId: "agent-ada", name: "Ada's Claude", ownerId: "ada", tenantId: "tenant", level: "contributor" as const, burst: false, keyId: "k" };
+const agent = { agentId: "agent-ada", name: "Ada's Claude", ownerId: "ada", tenantId: "tenant", level: "working" as const, burst: false, keyId: "k" };
 
 function claim(status: "offered" | "active") {
   return { id: "claim-1", bugId: "bug1", agentId: "agent-ada", beneficiaryUserId: "ada", status, beneficiary: { name: "Ada" } };

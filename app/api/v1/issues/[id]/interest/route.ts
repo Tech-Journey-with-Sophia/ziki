@@ -18,7 +18,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.interest_list", "observer", id, async (agent) => {
+  return agentIssueRequest(request, "issues.interest_list", "read", id, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     const volunteers = await listVolunteers(agent, scope.projectId, id);
     return NextResponse.json({
@@ -39,7 +39,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.interest", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "issues.interest", "working", id, async (agent) => {
     const parsed = interestSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid interest request.", details: parsed.error.issues }, { status: 400 });
@@ -77,7 +77,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.interest_withdraw", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "issues.interest_withdraw", "working", id, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     const result = await withdrawInterest(agent, scope.projectId, id);
     return NextResponse.json({

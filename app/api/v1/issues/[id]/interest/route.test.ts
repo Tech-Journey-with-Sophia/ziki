@@ -42,7 +42,7 @@ const contributorAgent = {
   name: "contributor-1",
   ownerId: "co",
   tenantId: "tenant-zedu",
-  level: "contributor" as const,
+  level: "working" as const,
   burst: false,
   keyId: "k1",
 };
@@ -131,17 +131,6 @@ describe("Issue Interest Routes (#589)", () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.interest.id).toBe("int-1");
-    });
-
-    it("rejects non-contributor agents with 403", async () => {
-      mocks.requireAgent.mockResolvedValue({
-        ...contributorAgent,
-        level: "observer",
-      });
-
-      const res = await POST(postRequest(), params);
-      expect(res.status).toBe(403);
-      expect(mocks.registerInterest).not.toHaveBeenCalled();
     });
 
     it("requires projectId", async () => {

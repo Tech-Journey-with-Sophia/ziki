@@ -34,7 +34,7 @@ const agent = {
   name: "merger-bot",
   ownerId: "owner",
   tenantId: "t1",
-  level: "merger" as const,
+  level: "manager" as const,
   burst: false,
   keyId: "k",
 };

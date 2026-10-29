@@ -25,9 +25,10 @@ describe("My agents page", () => {
     expect(source).toMatch(/ownerUserId: user\.id/);
   });
 
-  it("keeps the page to the agent list: no role write-up, audit log button or Levels card", () => {
+  it("keeps the page to the agent list: no role write-up, audit log or Activity & Approvals button, or Levels card", () => {
     expect(source).not.toContain("SEPARATE_LEVEL_AGENTS");
     expect(source).not.toContain("/settings/audit");
+    expect(source).not.toContain('href="/activity"');
     expect(source).not.toContain("levels-heading");
   });
 

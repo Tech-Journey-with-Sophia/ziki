@@ -135,8 +135,8 @@ export async function executeAdminMerge(
   deps: AcceptFixDeps = {},
   options: AcceptFixOptions = {},
 ): Promise<AcceptFixResult> {
-  if (!hasLevel(agent.level, "admin_merger")) {
-    return { status: 403, error: "insufficient_level", message: "Only admin merger agents can execute the final merge." };
+  if (!hasLevel(agent.level, "merger")) {
+    return { status: 403, error: "insufficient_level", message: "Only merger agents can execute the final merge." };
   }
   return acceptFix(agent, bugId, deps, { verdict: "accept", ...options }, true);
 }
@@ -148,8 +148,8 @@ export async function acceptFix(
   options: AcceptFixOptions = {},
   forceAdminMerge = false,
 ): Promise<AcceptFixResult> {
-  if (!hasLevel(agent.level, "merger")) {
-    return { status: 403, error: "insufficient_level", message: "Only merger agents can accept a fix." };
+  if (!hasLevel(agent.level, "manager")) {
+    return { status: 403, error: "insufficient_level", message: "Only manager or merger agents can accept a fix." };
   }
 
   const bug = await prisma.bug.findFirst({
@@ -342,7 +342,7 @@ export async function acceptFix(
 
   const rewardedReviewerUserIds = reviewers;
   const solverUserId = claim?.beneficiaryUserId ?? bug.assigneeId;
-  const isAdminMerge = forceAdminMerge || agent.level === "admin_merger";
+  const isAdminMerge = forceAdminMerge || agent.level === "merger";
 
   if (!isAdminMerge) {
     return prisma.$transaction(async (tx) => {

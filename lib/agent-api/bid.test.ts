@@ -30,7 +30,7 @@ const caller = {
   name: "Ada's Claude",
   ownerId: "ada",
   tenantId: "tenant",
-  level: "contributor" as const,
+  level: "working" as const,
   burst: false,
   keyId: "key1",
 };
@@ -149,7 +149,7 @@ describe("awardBid", () => {
   it("preserves the dispatcher owner on an auto-awarded claim", async () => {
     db.issueBid.findUnique.mockResolvedValue(stored);
     db.issueClaim.create.mockResolvedValue({ id: "claim1" });
-    const dispatcher = { ...caller, ownerId: "dispatcher-owner", level: "dispatcher" as const };
+    const dispatcher = { ...caller, ownerId: "dispatcher-owner", level: "manager" as const };
     await awardBid({ id: "reporter" }, "bid1", dispatcher);
     expect(db.issueClaim.create.mock.calls[0][0].data).toMatchObject({
       dispatcherUserId: "dispatcher-owner", beneficiaryUserId: "ada", status: "active",
@@ -157,14 +157,14 @@ describe("awardBid", () => {
   });
 
   it("rejects forged dispatcher attribution from a lower-level caller", async () => {
-    await expect(awardBid({ id: "reporter" }, "bid1", caller)).rejects.toThrow("dispatcher");
+    await expect(awardBid({ id: "reporter" }, "bid1", caller)).rejects.toThrow("This needs a manager agent.");
     expect(db.issueClaim.create).not.toHaveBeenCalled();
   });
 
   it("rejects dispatcher attribution from another tenant", async () => {
     db.issueBid.findUnique.mockResolvedValue(stored);
     await expect(awardBid({ id: "reporter" }, "bid1", {
-      ...caller, tenantId: "another-tenant", level: "dispatcher",
+      ...caller, tenantId: "another-tenant", level: "manager",
     })).rejects.toMatchObject({ status: 404 });
     expect(db.issueClaim.create).not.toHaveBeenCalled();
   });

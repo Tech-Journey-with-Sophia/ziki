@@ -24,7 +24,7 @@ function request(path = "/events", method = "GET", body?: unknown, key = true) {
 }
 const context = { params: Promise.resolve({ id: "subscription-a" }) };
 const event = { id: "event-a", txid: BigInt("100"), createdAt: new Date("2026-10-19T12:00:00Z"), type: "issue.created", payload: {}, actorAgentId: "agent-a", bugId: "issue-a" };
-function key(level = "contributor", project: { id: string; slug: string } | null = null) {
+function key(level = "working", project: { id: string; slug: string } | null = null) {
   return { id: "key-a", revokedAt: null, projectId: project?.id ?? null, project: project ? { slug: project.slug } : null, agent: { id: "agent-a", name: "Agent", ownerUserId: "owner", tenantId: "tenant-a", level, burst: false, revokedAt: null, owner: { memberships: [{ tenantId: "tenant-a" }] } } };
 }
 beforeEach(() => {
@@ -50,8 +50,8 @@ describe("events endpoint", () => {
     expect((await GET(request())).status).toBe(401);
     expect(db.agentEvent.findMany).not.toHaveBeenCalled();
   });
-  it("allows an observer, scopes by tenant, charges a read and audits", async () => {
-    db.agentApiKey.findUnique.mockResolvedValueOnce(key("observer"));
+  it("allows a working agent, scopes by tenant, charges a read and audits", async () => {
+    db.agentApiKey.findUnique.mockResolvedValueOnce(key("working"));
     db.agentEvent.findMany.mockResolvedValue([event]);
     const response = await GET(request());
     expect(response.status).toBe(200);
@@ -138,7 +138,7 @@ describe("events endpoint", () => {
 
 describe("events endpoint project scope (#405)", () => {
   beforeEach(() => {
-    db.agentApiKey.findUnique.mockResolvedValue(key("observer", { id: "proj-ziki", slug: "ziki" }));
+    db.agentApiKey.findUnique.mockResolvedValue(key("working", { id: "proj-ziki", slug: "ziki" }));
     db.bug.findFirst.mockReset();
     db.agentEvent.findMany.mockResolvedValue([]);
   });
@@ -210,7 +210,7 @@ describe("events endpoint project scope (#405)", () => {
     expect(db.bug.findFirst).toHaveBeenCalledWith({ where: { id: "issue-ziki", tenantId: "tenant-a" }, select: { projectId: true } });
 
     db.bug.findFirst.mockClear();
-    db.agentApiKey.findUnique.mockResolvedValueOnce(key("observer"));
+    db.agentApiKey.findUnique.mockResolvedValueOnce(key("working"));
     db.agentEvent.findMany.mockResolvedValueOnce([]);
     expect((await GET(request("/events?projectId=proj-web"))).status).toBe(200);
     expect(db.agentEvent.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: "tenant-a", projectId: "proj-web" }) }));
@@ -219,13 +219,12 @@ describe("events endpoint project scope (#405)", () => {
 });
 
 describe("webhook subscription endpoints", () => {
-  it("requires keys and contributor writes", async () => {
+  it("requires a key, and lets every working agent list and subscribe", async () => {
     expect((await subscribe(request("/webhooks", "POST", {}, false))).status).toBe(401);
-    db.agentApiKey.findUnique.mockResolvedValue(key("observer"));
+    db.agentApiKey.findUnique.mockResolvedValue(key("working"));
     expect((await subscriptions(request("/webhooks"))).status).toBe(200);
-    expect((await subscribe(request("/webhooks", "POST", { url: "https://receiver.test" }))).status).toBe(403);
-    expect((await DELETE(request("/webhooks/id", "DELETE"), context)).status).toBe(403);
-    expect((await PATCH(request("/webhooks/id", "PATCH"), context)).status).toBe(403);
+    db.webhookSubscription.findFirst.mockResolvedValue(null);
+    expect((await subscribe(request("/webhooks", "POST", { url: "https://receiver.test" }))).status).toBe(201);
   });
   it("encrypts a one-time secret and excludes it from list queries", async () => {
     db.webhookSubscription.findFirst.mockResolvedValue(null);

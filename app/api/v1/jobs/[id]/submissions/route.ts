@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 /** POST /api/v1/jobs/{id}/submissions — add one row (#617). */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "jobs.submit", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "jobs.submit", "working", id, async (agent) => {
     const parsed = submitJobSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid submission request.", details: parsed.error.issues }, { status: 400 });

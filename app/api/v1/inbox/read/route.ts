@@ -13,7 +13,7 @@ export const runtime = "nodejs";
  * `{ marked }`. Charged as a read: it only changes the agent's own state.
  */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "inbox.read", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "inbox.read", "read", null, async (agent) => {
     const input = markInboxReadSchema.parse(await issueJson(request));
     const marked = await markInboxRead(agent, input);
     if (marked === null) return NextResponse.json({ error: "Inbox item not found." }, { status: 404 });

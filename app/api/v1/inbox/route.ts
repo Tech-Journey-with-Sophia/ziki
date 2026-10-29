@@ -22,7 +22,7 @@ export const maxDuration = 60;
  * input cursor. Charged as a read.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "inbox.poll", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "inbox.poll", "read", null, async (agent) => {
     const params = request.nextUrl.searchParams;
 
     const cursorResult = parseEventCursor(params);

@@ -118,8 +118,8 @@ export default async function AdminUsersPage({
           <p className="mt-1 max-w-2xl text-sm text-zk-text2">
             People in <span className="font-medium text-zk-text">{tenantName}</span>.
             Organization role is for this workspace only. Site role (including super admin)
-            applies across the platform. You can also set each person’s agents to contributor,
-            merger, or any other level.
+            applies across the platform. Both are people’s roles. Agents have their own class
+            (working, manager or merger), which you can set per agent; it never changes a person’s role.
           </p>
           <p className="mt-2 text-sm">
             <Link

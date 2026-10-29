@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
       name: "Agent One",
       tenantId: "tenant-1",
       ownerId: "user-1",
-      level: "contributor",
+      level: "working",
       burst: false,
       keyId: "key-1",
     });

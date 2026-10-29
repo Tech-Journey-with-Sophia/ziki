@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const agent = {
-    agentId: "agent-1", ownerId: "owner-1", tenantId: "tenant-1", level: "contributor",
+    agentId: "agent-1", ownerId: "owner-1", tenantId: "tenant-1", level: "working",
     burst: false, keyId: "key-1", name: "Tester",
   };
   return {
@@ -51,7 +51,7 @@ describe("POST /api/v1/missions/next (#619)", () => {
       viewport: "mobile_375",
       stagingUrl: "https://staging.example",
     });
-    expect(mocks.agentIssueRequest).toHaveBeenCalledWith(request, "missions.next", "contributor", null, expect.any(Function));
+    expect(mocks.agentIssueRequest).toHaveBeenCalledWith(request, "missions.next", "working", null, expect.any(Function));
     expect(mocks.nextTestMission).toHaveBeenCalledWith(mocks.agent, "project-1");
   });
 

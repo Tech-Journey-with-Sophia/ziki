@@ -5,7 +5,7 @@ import { acceptOffer } from "@/lib/agent-api/offer";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "claims.accept", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "claims.accept", "working", id, async (agent) => {
     try {
       return NextResponse.json(await acceptOffer(agent, id), { status: 200 });
     } catch (error) {

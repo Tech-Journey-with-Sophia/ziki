@@ -13,7 +13,7 @@ function renderForm(instructions: string | null) {
   return render(
     <PairForm
       initialCode="ABCD-2345"
-      pending={{ name: "Ada's Claude", model: "Claude", level: "contributor", instructions }}
+      pending={{ name: "Ada's Claude", model: "Claude", level: "working", instructions }}
       unknownCode={false}
       projects={[{ id: "project_1", name: "Ziki" } as never]}
       activeProjectId="project_1"

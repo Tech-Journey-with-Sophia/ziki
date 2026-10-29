@@ -63,7 +63,7 @@ export function AgentSettingsForm({
         toast(result.error, "error");
         return;
       }
-      toast(`${name} is now ${AGENT_LEVEL_LABELS[next].toLowerCase()}.`, "success");
+      toast(`${name} is now a ${AGENT_LEVEL_LABELS[next].toLowerCase()}.`, "success");
       router.refresh();
     });
   }

@@ -11,9 +11,9 @@ export const runtime = "nodejs";
  * and available for claiming or bidding. Contributor level only.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "contributor.ready", "observer", null, async (agent) => {
-    if (!hasLevel(agent.level, "contributor")) {
-      return NextResponse.json({ error: "This needs an agent at contributor level." }, { status: 403 });
+  return agentIssueRequest(request, "contributor.ready", "read", null, async (agent) => {
+    if (!hasLevel(agent.level, "working")) {
+      return NextResponse.json({ error: "This needs a working agent." }, { status: 403 });
     }
     const params = request.nextUrl.searchParams;
     if (!params.get("projectId")) return NextResponse.json({ error: PROJECT_ID_REQUIRED }, { status: 400 });

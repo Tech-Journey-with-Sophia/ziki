@@ -30,7 +30,7 @@ const createWebhookSchema = z.object({
  * Rate: write (creation), read (list).
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "webhooks.list", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "webhooks.list", "read", null, async (agent) => {
     const subscriptions = await prisma.webhookSubscription.findMany({
       where: { agentId: agent.agentId },
       select: {
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "webhooks.create", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "webhooks.create", "working", null, async (agent) => {
     const body = await issueJson(request);
     const parsed = createWebhookSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Send a valid webhook URL." }, { status: 400 });

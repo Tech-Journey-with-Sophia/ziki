@@ -26,6 +26,7 @@ function entrySource(role: string, points: number, sourceKey: string): string {
     reviewer: "Fix review",
     "triager-clear": "Duplicate clearance",
     "duplicate-marker": "Duplicate detection",
+    idea: "Idea contribution",
   };
   return labels[sourceKey.split(":")[0]] ?? `${role[0].toUpperCase()}${role.slice(1)} award`;
 }

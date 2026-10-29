@@ -339,7 +339,7 @@ describe("Human approval rules and gates (#598)", () => {
 
       // Verify merge was resumed automatically
       expect(mergeAcceptedFix).toHaveBeenCalledWith(
-        expect.objectContaining({ agentId: "merger-1", level: "merger" }),
+        expect.objectContaining({ agentId: "merger-1", level: "manager" }),
         "bug-200",
         expect.anything(),
       );

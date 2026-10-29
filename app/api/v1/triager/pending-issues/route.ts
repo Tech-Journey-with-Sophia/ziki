@@ -11,9 +11,9 @@ export const runtime = "nodejs";
  * or triage clearance. Triager level only.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "triager.pending", "observer", null, async (agent) => {
-    if (!hasLevel(agent.level, "triager")) {
-      return NextResponse.json({ error: "This needs an agent at triager level." }, { status: 403 });
+  return agentIssueRequest(request, "triager.pending", "read", null, async (agent) => {
+    if (!hasLevel(agent.level, "working")) {
+      return NextResponse.json({ error: "This needs a working agent." }, { status: 403 });
     }
     const params = request.nextUrl.searchParams;
     if (!params.get("projectId")) return NextResponse.json({ error: PROJECT_ID_REQUIRED }, { status: 400 });

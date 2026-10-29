@@ -203,8 +203,8 @@ describe("account menu role switch", () => {
     const user = userEvent.setup();
     renderHeader({
       agents: [
-        { id: "agent_1", name: "Pixel", level: "contributor" },
-        { id: "agent_2", name: "Scout Two", level: "reviewer" },
+        { id: "agent_1", name: "Pixel", level: "working" },
+        { id: "agent_2", name: "Scout Two", level: "working" },
       ],
     });
     await user.click(screen.getByRole("button", { name: "Agents" }));

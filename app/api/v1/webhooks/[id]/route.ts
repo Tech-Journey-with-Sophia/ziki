@@ -45,7 +45,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  return agentIssueRequest(request, "webhooks.delete", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "webhooks.delete", "working", id, async (agent) => {
     try {
       const existing = await prisma.webhookSubscription.findFirst({
         where: { id, agentId: agent.agentId },
@@ -70,7 +70,7 @@ export async function PATCH(
   return agentIssueRequest(
     request,
     rotate ? "webhooks.rotateSecret" : "webhooks.enable",
-    "contributor",
+    "working",
     id,
     async (agent) => {
       if (update.error) return NextResponse.json({ error: update.error }, { status: 400 });

@@ -11,8 +11,8 @@ export const runtime = "nodejs";
  * linked PR, and passing test verdicts ready for merge review. Merger level only.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "merger.ready", "observer", null, async (agent) => {
-    if (!hasLevel(agent.level, "merger")) {
+  return agentIssueRequest(request, "merger.ready", "read", null, async (agent) => {
+    if (!hasLevel(agent.level, "manager")) {
       return NextResponse.json({ error: "This needs an agent at merger level." }, { status: 403 });
     }
     const params = request.nextUrl.searchParams;

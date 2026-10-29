@@ -3,11 +3,15 @@
  * ziki-agent: a small reference client for the Ziki agent API (#611).
  *
  *   node scripts/ziki-agent.mjs pair --name "Ada's Claude"
+ *   node scripts/ziki-agent.mjs work --watch
  *   node scripts/ziki-agent.mjs watch --exec 'claude -p "$(cat)"'
  *
- * `pair` runs the device-code pairing flow and stores the key. `watch`
- * long-polls GET /api/v1/events and hands each event to a local command, or
- * prints it as a JSON line. It has no dependencies beyond Node 22.
+ * `pair` runs the device-code pairing flow and stores the key. `work` reads
+ * the project's work feed (GET /<project>/work), the one place work appears;
+ * `work --watch` is how to wait for work: it polls the feed with If-None-Match
+ * and prints each new item you can act on. `watch` long-polls
+ * GET /api/v1/events and hands each event to a local command, or prints it as
+ * a JSON line; use it to react to activity. No dependencies beyond Node 22.
  *
  * See docs/agent-client.md.
  */
@@ -21,6 +25,7 @@ import { pathToFileURL } from "node:url";
 export const DEFAULT_URL = "https://ziki.dev";
 const MAX_WAIT_SECONDS = 25; // GET /api/v1/events caps `wait` at 25
 const MAX_PAUSE_MS = 60 * 60 * 1000; // never sleep longer than one budget hour
+const WORK_POLL_SECONDS = 30; // the work feed's pollAfterSeconds when it sends none
 
 export class ApiError extends Error {
   /**
@@ -171,13 +176,20 @@ export function makeContext(overrides = {}) {
 /**
  * Call the API. A 429 waits for Retry-After and tries again. Network errors and
  * 5xx back off and try again. Other 4xx (including 401) throw straight away.
+ * A 304 (sent when `If-None-Match` matches) returns with `data: null`.
  * @param {Context} ctx
  * @param {string} baseUrl
- * @param {string} route e.g. "/api/v1/events?wait=25"
- * @param {{ method?: string, body?: any, key?: string, retries?: number }} [options]
+ * @param {string} route e.g. "/api/v1/events?wait=25", or a full URL
+ * @param {{ method?: string, body?: any, key?: string, retries?: number, headers?: Record<string, string> }} [options]
  */
 export async function api(ctx, baseUrl, route, options = {}) {
-  const { method = "GET", body, key, retries = Infinity } = options;
+  const {
+    method = "GET",
+    body,
+    key,
+    retries = Infinity,
+    headers = {},
+  } = options;
   for (let attempt = 0; ; attempt++) {
     let response;
     try {
@@ -187,6 +199,7 @@ export async function api(ctx, baseUrl, route, options = {}) {
           Accept: "application/json",
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
           ...(key ? { Authorization: `Bearer ${key}` } : {}),
+          ...headers,
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -217,6 +230,8 @@ export async function api(ctx, baseUrl, route, options = {}) {
       continue;
     }
 
+    if (response.status === 304)
+      return { data: null, headers: response.headers, status: 304 };
     const data = await response.json().catch(() => null);
     if (!response.ok) {
       const detail = data?.error ?? data?.message ?? response.statusText;
@@ -462,20 +477,114 @@ async function handleEvent(ctx, { exec, configFile, config }, event) {
     );
 }
 
+/**
+ * The work feed URL for this key. `--project` (a slug or id) wins; else the
+ * `work_url` from GET /api/v1/agents/me; else, for a key that covers every
+ * project, the saved project or the first one, by id (an id is never hidden by
+ * an app page the way a slug can be).
+ * @param {Context} ctx @param {any} config @param {string} [project]
+ */
+export async function workUrl(ctx, config, project) {
+  if (project)
+    return new URL(`/${encodeURIComponent(project)}/work`, config.url).href;
+  const me = await api(ctx, config.url, "/api/v1/agents/me", {
+    key: config.apiKey,
+    retries: 5,
+  });
+  if (me.data?.work_url) return me.data.work_url;
+  const id = config.projectId ?? me.data?.projects?.[0]?.id;
+  if (!id)
+    throw new Error("This key has no project. Pass --project <slug-or-id>.");
+  return new URL(`/${encodeURIComponent(id)}/work`, config.url).href;
+}
+
+/**
+ * Read the work feed: everything this agent can do in the project. Without
+ * `watch` it prints the feed once. With `watch` it polls every
+ * `pollAfterSeconds` with If-None-Match (an unchanged feed is a 304, still one
+ * read) and prints each new item you can act on (`canAct`) as a JSON line,
+ * keyed by `key`. The feed's `ask` lines go to stderr when they change.
+ * @param {Context} ctx
+ * @param {{ configFile: string, project?: string, watch?: boolean, maxPolls?: number, signal?: AbortSignal }} options
+ */
+export async function work(ctx, options) {
+  const {
+    configFile,
+    project,
+    watch: keepWatching = false,
+    maxPolls = Infinity,
+    signal,
+  } = options;
+  const config = await loadConfig(configFile);
+  if (!config?.apiKey) throw new Error("No saved key. Run `pair` first.");
+  const url = await workUrl(ctx, config, project);
+
+  if (!keepWatching) {
+    const result = await api(ctx, config.url, url, { key: config.apiKey });
+    ctx.out(JSON.stringify(result.data, null, 2));
+    return;
+  }
+
+  ctx.log(`Watching ${url} as "${config.name}". Press Ctrl+C to stop.`);
+  let etag = null;
+  let seen = new Set();
+  let asked = "";
+  let pollSeconds = WORK_POLL_SECONDS;
+  for (let polls = 0; polls < maxPolls && !signal?.aborted; polls++) {
+    if (polls > 0) await ctx.sleep(pollSeconds * 1000);
+    const result = await api(ctx, config.url, url, {
+      key: config.apiKey,
+      headers: etag ? { "If-None-Match": etag } : {},
+    });
+    const pause = budgetPauseMs(result.headers, ctx.now());
+    if (pause) {
+      ctx.log(
+        `Read budget used up. Pausing ${Math.ceil(pause / 1000)}s until it resets.`,
+      );
+      await ctx.sleep(pause);
+    }
+    if (result.status === 304 || !result.data) continue;
+    etag = result.headers?.get?.("etag") ?? null;
+    pollSeconds = Math.max(
+      Number(result.data.pollAfterSeconds) || WORK_POLL_SECONDS,
+      1,
+    );
+
+    const ask = (result.data.ask ?? []).join("\n");
+    if (ask && ask !== asked) ctx.log(ask);
+    asked = ask;
+
+    const current = new Set();
+    for (const item of result.data.items ?? []) {
+      current.add(item.key);
+      if (item.canAct && !seen.has(item.key)) ctx.out(JSON.stringify(item));
+    }
+    // An item that goes away and comes back is new work again.
+    seen = current;
+  }
+}
+
 const HELP = `ziki-agent: reference client for the Ziki agent API
 
 Usage:
   node scripts/ziki-agent.mjs pair --name <name> [--model <model>] [--level <level>] [--url <site>] [--no-open]
+  node scripts/ziki-agent.mjs work [--watch] [--project <slug-or-id>]
   node scripts/ziki-agent.mjs watch [--exec <command>] [--types a,b] [--wait <0-25>] [--replay]
 
 pair   Start device-code pairing, open the approval page, save the key.
-watch  Long-poll events. Each event goes to --exec as a JSON line on stdin,
-       or is printed as a JSON line. Resumes from the saved cursor.
+work   Print the project's work feed: everything you can do, in one list.
+       work --watch is how to wait for work: it polls the feed about
+       every 30 seconds (If-None-Match, so an unchanged feed is a 304) and
+       prints each new item you can act on as a JSON line.
+watch  For reacting to activity, not finding work. Long-polls events. Each
+       event goes to --exec as a JSON line on stdin, or is printed as a JSON
+       line. Resumes from the saved cursor.
 
 Options:
   --url <site>     Ziki site (default ${DEFAULT_URL}; or set ZIKI_URL)
-  --level <level>  Level to request: observer, contributor (default), triager, reviewer, dispatcher
+  --level <level>  Agent class to request: working (default; old role names are mapped)
   --config <file>  Key file (default ~/.config/ziki/agent.json; or ZIKI_AGENT_CONFIG)
+  --project <p>    work: project slug or id (default: work_url from GET /api/v1/agents/me)
   --replay         On first run, handle existing events instead of skipping them
 `;
 
@@ -508,6 +617,8 @@ export async function main(argv, ctx = makeContext()) {
       wait: { type: "string" },
       replay: { type: "boolean" },
       once: { type: "boolean" },
+      watch: { type: "boolean" },
+      project: { type: "string" },
       "no-open": { type: "boolean" },
     },
     strict: true,
@@ -524,6 +635,18 @@ export async function main(argv, ctx = makeContext()) {
         url,
         open: !values["no-open"],
         configFile,
+      });
+      return 0;
+    }
+    if (command === "work") {
+      const abort = new AbortController();
+      process.once("SIGINT", () => abort.abort());
+      await work(ctx, {
+        configFile,
+        project: values.project,
+        watch: values.watch,
+        maxPolls: values.once ? 1 : Infinity,
+        signal: abort.signal,
       });
       return 0;
     }

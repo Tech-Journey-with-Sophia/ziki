@@ -21,6 +21,8 @@ export type RequestSpec = {
   file?: { filename: string; dataBase64: string };
   /** Keep a streaming response open for this many seconds, then return what arrived. */
   streamForSeconds?: number;
+  /** The path is at the site root, not under `/api/v1` (the project work feed). */
+  siteRoute?: boolean;
 };
 
 type FetchLike = typeof fetch;
@@ -61,8 +63,8 @@ export class ZikiClient {
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
 
-  async request({ method, path, query, body, headers, file, streamForSeconds }: RequestSpec): Promise<unknown> {
-    const url = new URL(`/api/v1${path}`, this.config.url);
+  async request({ method, path, query, body, headers, file, streamForSeconds, siteRoute }: RequestSpec): Promise<unknown> {
+    const url = new URL(siteRoute ? path : `/api/v1${path}`, this.config.url);
     for (const [key, value] of Object.entries(query ?? {})) {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }

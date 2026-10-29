@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "questions.read", "observer", id, async (agent) =>
+  return agentIssueRequest(request, "questions.read", "read", id, async (agent) =>
     NextResponse.json({ question: await readAgentQuestion(agent, id) }),
   );
 }

@@ -28,13 +28,9 @@ export const agentsChipClass =
   "inline-flex items-center rounded-full bg-zk-chip px-2.5 py-0.5 text-xs font-bold text-zk-text2";
 
 const LEVEL_BADGE: Record<AgentLevel, string> = {
-  observer: "bg-zk-chip text-zk-text2",
-  contributor: "bg-zk-ok-bg text-zk-ok-fg",
-  triager: "bg-zk-warn-bg text-zk-warn-fg",
-  reviewer: "bg-zk-info-bg text-zk-info-fg",
-  dispatcher: "bg-[#FDECEF] text-[#B4233F] dark:bg-[#3A1424] dark:text-[#F9A8C0]",
-  merger: "bg-[#FDECEF] text-[#B4233F] dark:bg-[#3A1424] dark:text-[#F9A8C0]",
-  admin_merger: "bg-[#7C3AED]/15 text-[#7C3AED] dark:bg-[#7C3AED]/25 dark:text-[#C4B5FD]",
+  working: "bg-zk-ok-bg text-zk-ok-fg",
+  manager: "bg-[#FDECEF] text-[#B4233F] dark:bg-[#3A1424] dark:text-[#F9A8C0]",
+  merger: "bg-[#7C3AED]/15 text-[#7C3AED] dark:bg-[#7C3AED]/25 dark:text-[#C4B5FD]",
 };
 
 export function levelBadgeClass(level: AgentLevel): string {

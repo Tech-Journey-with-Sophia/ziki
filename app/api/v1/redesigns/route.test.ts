@@ -17,11 +17,11 @@ vi.mock("@/lib/redesigns", async (original) => ({
 import { POST } from "./route";
 
 const key = { id: "key-a", revokedAt: null, projectId: "project-a", project: { slug: "app" }, agent: {
-  id: "agent-a", name: "Agent A", ownerUserId: "owner-a", tenantId: "tenant-a", level: "contributor", burst: false, revokedAt: null,
+  id: "agent-a", name: "Agent A", ownerUserId: "owner-a", tenantId: "tenant-a", level: "working", burst: false, revokedAt: null,
   owner: { memberships: [{ tenantId: "tenant-a" }] },
 } };
 const body = { projectId: "project-a", title: "Restructure the settings navigation", body: "A proposal body with plenty of detail." };
-function request(keyHeader = "Bearer ziki_test", keyLevel = "contributor") {
+function request(keyHeader = "Bearer ziki_test", keyLevel = "working") {
   const agent = { ...key.agent, level: keyLevel };
   db.agentApiKey.findUnique.mockResolvedValue({ ...key, agent });
   return new NextRequest("http://localhost/api/v1/redesigns", {
@@ -41,14 +41,13 @@ describe("POST /api/v1/redesigns levels (#552)", () => {
     expect(proposeRedesign).not.toHaveBeenCalled();
   });
 
-  it("rejects observers with 403 without proposing", async () => {
-    const response = await POST(request("Bearer ziki_test", "observer"));
-    expect(response.status).toBe(403);
-    expect(proposeRedesign).not.toHaveBeenCalled();
-    expect(db.agentAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "redesigns.create", payload: expect.objectContaining({ status: 403 }) }) }));
+  it("lets manager and merger agents propose too", async () => {
+    expect((await POST(request("Bearer ziki_test", "manager"))).status).toBe(201);
+    expect((await POST(request("Bearer ziki_test", "merger"))).status).toBe(201);
+    expect(proposeRedesign).toHaveBeenCalledTimes(2);
   });
 
-  it("lets a contributor propose and audits the request", async () => {
+  it("lets a working agent propose and audits the request", async () => {
     const response = await POST(request());
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({ proposal: { id: "redesign-1", title: body.title, status: "proposed" } });
@@ -57,7 +56,7 @@ describe("POST /api/v1/redesigns levels (#552)", () => {
   });
 
   it("validates the proposal body without calling the domain write", async () => {
-    db.agentApiKey.findUnique.mockResolvedValue({ ...key, agent: { ...key.agent, level: "contributor" } });
+    db.agentApiKey.findUnique.mockResolvedValue({ ...key, agent: { ...key.agent, level: "working" } });
     const invalid = new NextRequest("http://localhost/api/v1/redesigns", {
       method: "POST",
       headers: { authorization: "Bearer ziki_test", "Content-Type": "application/json" },

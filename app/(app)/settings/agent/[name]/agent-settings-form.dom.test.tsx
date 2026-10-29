@@ -20,7 +20,7 @@ beforeEach(() => vi.clearAllMocks());
 
 function renderForm() {
   render(
-    <AgentSettingsForm agentId="agent_1" name="Pixel" level="contributor" levels={["observer", "contributor", "reviewer"]} />,
+    <AgentSettingsForm agentId="agent_1" name="Pixel" level="manager" levels={["working"]} />,
   );
   return userEvent.setup();
 }
@@ -51,17 +51,19 @@ describe("AgentSettingsForm", () => {
     vi.mocked(setAgentLevelAction).mockResolvedValue({ ok: true });
     const user = renderForm();
     const select = screen.getByLabelText("Level") as HTMLSelectElement;
-    expect([...select.options].map((option) => option.value)).toEqual(["contributor", "observer", "reviewer"]);
-    await user.selectOptions(select, "reviewer");
-    expect(setAgentLevelAction).toHaveBeenCalledWith("agent_1", "reviewer");
+    expect([...select.options].map((option) => option.value)).toEqual(["manager", "working"]);
+    expect([...select.options].map((option) => option.textContent)).toEqual(["Manager agent", "Working agent"]);
+    expect(select.options[0].disabled).toBe(true);
+    await user.selectOptions(select, "working");
+    expect(setAgentLevelAction).toHaveBeenCalledWith("agent_1", "working");
     expect(refresh).toHaveBeenCalled();
   });
 
   it("puts the level back when the change is refused", async () => {
     vi.mocked(setAgentLevelAction).mockResolvedValue({ ok: false, error: "That agent is revoked." });
     const user = renderForm();
-    await user.selectOptions(screen.getByLabelText("Level"), "observer");
-    expect((screen.getByLabelText("Level") as HTMLSelectElement).value).toBe("contributor");
+    await user.selectOptions(screen.getByLabelText("Level"), "working");
+    expect((screen.getByLabelText("Level") as HTMLSelectElement).value).toBe("manager");
     expect(toast).toHaveBeenCalledWith("That agent is revoked.", "error");
   });
 });

@@ -32,7 +32,7 @@ afterEach(() => vi.restoreAllMocks());
 
 const agentRow = {
   id: "agent-a", name: "Agent A", ownerUserId: "owner-a", tenantId: "tenant-a",
-  level: "contributor", burst: false, revokedAt: null,
+  level: "working", burst: false, revokedAt: null,
   owner: { memberships: [{ tenantId: "tenant-a" }] },
 };
 const context = { params: Promise.resolve({ id: "issue-a" }) };

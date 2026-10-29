@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     // A supplied bad key must not fall back to a valid browser session.
     if (request.headers.has("authorization")) {
       agent = await requireAgent(request);
-      requireLevel(agent, "observer");
+      requireLevel(agent, "working");
       const budget = await consumeAgentBudget(
         { id: agent.agentId, burst: agent.burst, burstUntil: agent.burstUntil ?? null },
         "read",

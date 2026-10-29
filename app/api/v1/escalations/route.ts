@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * Body: `{ "body": "…", "type": "question" | "work_authorization" | "blocker" | "scope_change" | "human_approval", "bugId": "…" }`
  */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "escalations.create", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "escalations.create", "working", null, async (agent) => {
     const parsed = agentEscalationSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid escalation.", details: parsed.error.issues }, { status: 400 });

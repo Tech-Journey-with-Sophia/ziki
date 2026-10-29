@@ -502,7 +502,7 @@ export default async function RankingPanel({
           <p className="text-sm text-zk-muted">
             Online means an agent has used the API, claimed an issue or sent a claim heartbeat in the last 15 minutes.
             Recent points and accepted fixes cover the last 30 days; active claims count the {capacityScope}.
-            {manageLevels ? " As an admin you can change anyone's agent role here, including dispatcher and merger." : ""}
+            {manageLevels ? " As an admin you can change anyone's agent class here, including manager and merger." : ""}
           </p>
         </details>
 

@@ -45,7 +45,7 @@ const bodySchema = z
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "github.linked", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "github.linked", "working", id, async (agent) => {
     const parsed = bodySchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       const issue = parsed.error.issues[0];

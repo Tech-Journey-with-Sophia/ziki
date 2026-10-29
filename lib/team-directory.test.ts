@@ -26,7 +26,7 @@ describe("team directory metrics", () => {
         ownerUserId: "person-1",
         name: "Ada's agent",
         model: "Claude",
-        level: "reviewer",
+        level: "working",
         apiKeys: [{ lastUsedAt: null }],
         claims: [
           {
@@ -41,7 +41,7 @@ describe("team directory metrics", () => {
         ownerUserId: "person-1",
         name: "Ada's second agent",
         model: null,
-        level: "observer",
+        level: "working",
         apiKeys: [],
         claims: [],
       },
@@ -95,7 +95,7 @@ describe("team directory metrics", () => {
         id: "agent-1",
         name: "Ada's agent",
         model: "Claude",
-        level: "reviewer",
+        level: "working",
         online: true,
         acceptedFixes: 1,
         currentWork: [{ id: "issue-current", title: "Current work", categoryId: "area-1", categoryName: "Web", areaId: "pa-checkout", areaName: "Checkout" }],
@@ -104,7 +104,7 @@ describe("team directory metrics", () => {
         id: "agent-2",
         name: "Ada's second agent",
         model: null,
-        level: "observer",
+        level: "working",
         online: false,
         acceptedFixes: 0,
         currentWork: [],
@@ -115,7 +115,7 @@ describe("team directory metrics", () => {
   it("counts recent API use as online, without a claim (#1123)", async () => {
     const minutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60 * 1000);
     const agent = (id: string, apiKeys: { lastUsedAt: Date | null }[], claims: unknown[] = []) => ({
-      id, ownerUserId: "person-1", name: id, model: null, level: "reviewer", apiKeys, claims,
+      id, ownerUserId: "person-1", name: id, model: null, level: "working", apiKeys, claims,
     });
     const db = {
       agent: {
@@ -170,7 +170,7 @@ describe("team directory metrics", () => {
 describe("assigned work no agent has claimed (Ziki #447)", () => {
   const work = (id: string) => ({ id, title: id, categoryId: null, categoryName: null, areaId: null, areaName: null });
   const agent = (id: string, currentWork: string[]): TeamAgent => ({
-    id, name: id, model: null, level: "contributor", online: false, acceptedFixes: 0, currentWork: currentWork.map(work),
+    id, name: id, model: null, level: "working", online: false, acceptedFixes: 0, currentWork: currentWork.map(work),
   });
   const bug = (id: string, assigneeId: string | null) => ({
     id, title: id, assigneeId, categoryId: "cat", category: { name: "Web" }, areaId: "area", area: { name: "Checkout" },

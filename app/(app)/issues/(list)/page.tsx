@@ -36,6 +36,7 @@ import {
   isDone,
   parseShowResolved,
   resultCountText,
+  statusFilterLabel,
   statusFilterWhere,
 } from "@/lib/issue-state";
 import { calculatePagination } from "@/lib/pagination";
@@ -126,14 +127,27 @@ const DUPLICATE_STATUS = "duplicate";
 const READY_TO_MERGE_STATUS = "ready_to_merge";
 /** `?status=auto_merge`: resolved issues whose fix is live — merged to dev, staging, main/production (#SDLC). */
 const AUTO_MERGE_STATUS = "auto_merge";
+/**
+ * `?status=resolved`: the Done tab. Finished work, resolved or closed, that
+ * isn't in Ready to Merge or Live, so the tabs split All with no overlap:
+ * Open + In progress + Done + Ready to Merge + Live = All.
+ */
+const DONE_STATUS = "resolved";
+const MERGE_STAGES = ["ready_to_merge", "merged"];
+const NOT_MERGE_STAGE_WHERE = {
+  OR: [{ reviewStatus: null }, { reviewStatus: { notIn: MERGE_STAGES } }],
+} satisfies Prisma.BugWhereInput;
 
 /** The filters under the All tab. Open, In progress and Done have tabs of their own. */
-const ALL_FILTERS = [
-  { value: ALL_STATUS, label: "All" },
-  { value: "closed", label: "Closed" },
-  { value: REJECTED_STATUS, label: "Rejected" },
-  { value: DUPLICATE_STATUS, label: "Duplicates" },
-] as const;
+const ALL_FILTERS = [ALL_STATUS, "closed", REJECTED_STATUS, DUPLICATE_STATUS].map((value) => ({
+  value,
+  label: statusFilterLabel(value),
+}));
+/** The status tabs, left to right. */
+const STATUS_TABS = ["open", "in_progress", DONE_STATUS, READY_TO_MERGE_STATUS, AUTO_MERGE_STATUS, ALL_STATUS].map((value) => ({
+  value,
+  label: statusFilterLabel(value),
+}));
 
 /** New issue as a 32px + button; the name is kept for screen readers and the tooltip. */
 function NewIssueButton({ className = "" }: { className?: string }) {
@@ -363,6 +377,10 @@ export default async function BugsPage({
     where.status = "resolved";
     where.reviewStatus = "merged";
   }
+  if (statusParam === DONE_STATUS && !isDeletedView) {
+    where.status = { in: ["resolved", "closed"] };
+    where.AND = [NOT_MERGE_STAGE_WHERE];
+  }
   if (isSeverity(severityParam)) {
     where.severity = severityParam;
   }
@@ -440,14 +458,49 @@ export default async function BugsPage({
   // the stage clause is applied (#626): a ?stage= page must count the same
   // rows its result list shows — tabs, badges and the "Show N resolved" link
   // all follow the stage filter, not the pre-stage row set.
-  const { categoryId: _platformClause, ...platformTabWhere } = where;
+  // Count the same tenant/project and search scope without the selected tab:
+  // its status, and the extra clauses the Inbox lists, Rejected, Duplicates,
+  // Ready to Merge and Live add. Left in, those leaked into every other tab's
+  // count (on Ready to Merge, "All" only counted ready-to-merge issues).
+  const {
+    status: _selectedStatus,
+    id: _stageIds,
+    agentQuestions: _escalated,
+    validations: _rejected,
+    duplicateOfId: _duplicate,
+    redesigns: _design,
+    createdByAgentId: _drafts,
+    reviewStatus: _review,
+    AND: _notMergeStage,
+    ...tabScope
+  } = where;
+  // Put the default duplicate scope back: the Duplicates filter's override is
+  // dropped, but tabs and counts still leave out the duplicates the list hides.
+  const statusTabWhere: Prisma.BugWhereInput = { ...tabScope, ...duplicatesWhere(showDuplicates) };
+  void _design;
+  void _selectedStatus;
+  void _stageIds;
+  void _escalated;
+  void _rejected;
+  void _duplicate;
+  void _drafts;
+  void _review;
+  void _notMergeStage;
+  // The platform menu counts each platform's issues whatever tab is picked,
+  // so its numbers don't move as you switch tabs; the tabs then split the
+  // picked platform's total. (Counting inside the Inbox showed 0 almost
+  // everywhere.) A ?stage= from the URL still narrows it (#626); the Inbox's
+  // own New ideas and Drafted ideas lists don't.
+  const stageFromUrl = stageView !== null && inboxView !== "ideas" && inboxView !== "drafts";
+  const { categoryId: _platformClause, ...platformTabWhere }: Prisma.BugWhereInput = {
+    ...statusTabWhere,
+    ...(stageFromUrl ? { id: where.id } : {}),
+  };
   void _platformClause;
 
   let platformTabs: PlatformTab[] = [];
   if (!isDeletedView) {
     try {
-      // The platform menu sits beside the status tabs, so it counts within
-      // the selected tab (Open, Resolved, Escalated, ...).
       const grouped = await prisma.bug.groupBy({
         by: ["categoryId"],
         where: platformTabWhere,
@@ -482,9 +535,11 @@ export default async function BugsPage({
     const next = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (key === "page" || key === PLATFORM_PARAM) continue;
+      if (isEscalatedView && (key === INBOX_PARAM || key === SHOW_RESOLVED_PARAM)) continue;
       const single = toSingleQueryParam(value);
       if (single) next.set(key, single);
     }
+    if (isEscalatedView) next.set("status", ALL_STATUS);
     if (id) next.set(PLATFORM_PARAM, id);
     const qs = next.toString();
     return qs ? `/issues?${qs}` : "/issues";
@@ -645,7 +700,7 @@ export default async function BugsPage({
       if (kind) add(r.bugId, { kind, count: r._count._all });
     }
     for (const e of auditRows) {
-      const merger = e.agent.level === "merger" || e.agent.level === "admin_merger";
+      const merger = e.agent.level === "manager" || e.agent.level === "merger";
       if (e.action === "issue.accepted") add(e.bugId, { kind: "accepted", merged: payloadMerged(e.payload) });
       else if (merger) add(e.bugId, { kind: e.action === "issue.merge_rejected" ? "merge_rejected" : "deploy_failed" });
     }
@@ -728,25 +783,6 @@ export default async function BugsPage({
   const confirmedCount = [...stages.values()].filter((stage) => stage === "confirmed").length;
   const readyCount = [...stages.values()].filter((stage) => stage === "ready").length;
 
-  // Count the same tenant/project and search scope without the selected status.
-  const {
-    status: _selectedStatus,
-    id: _stageIds,
-    agentQuestions: _escalated,
-    validations: _rejected,
-    duplicateOfId: _duplicate,
-    redesigns: _design,
-    ...tabScope
-  } = where;
-  // Put the default duplicate scope back: the Duplicates filter's override is
-  // dropped, but tabs and counts still leave out the duplicates the list hides.
-  const statusTabWhere: Prisma.BugWhereInput = { ...tabScope, ...duplicatesWhere(showDuplicates) };
-  void _design;
-  void _selectedStatus;
-  void _stageIds;
-  void _escalated;
-  void _rejected;
-  void _duplicate;
   const [statusCounts, escalatedCount, rejectedCount, duplicateCount, readyToMergeCount, liveCount] = isDeletedView || !tenantId ? [[], 0, 0, 0, 0, 0] : await Promise.all([
     loadOrEmpty("status tabs", () => prisma.bug.groupBy({
       by: ["status"], where: statusTabWhere, _count: { _all: true },
@@ -769,6 +805,14 @@ export default async function BugsPage({
   ]);
   const countForStatus = (status: string) => statusCounts.find((row) => row.status === status)?._count._all ?? 0;
   const allCount = statusCounts.reduce((sum, row) => sum + row._count._all, 0);
+  // Ready to Merge and Live are resolved issues, so Done leaves them out.
+  const doneCount = countForStatus("resolved") + countForStatus("closed") - readyToMergeCount - liveCount;
+  const tabCount = (value: string) =>
+    value === ALL_STATUS ? allCount
+      : value === DONE_STATUS ? doneCount
+        : value === READY_TO_MERGE_STATUS ? readyToMergeCount
+          : value === AUTO_MERGE_STATUS ? liveCount
+            : countForStatus(value);
   const allFilterCount = (value: string) =>
     value === ALL_STATUS ? allCount : value === REJECTED_STATUS ? rejectedCount : value === DUPLICATE_STATUS ? duplicateCount : value === READY_TO_MERGE_STATUS ? readyToMergeCount : countForStatus(value);
   // The Inbox's other lists, counted only while it is open.
@@ -823,8 +867,8 @@ export default async function BugsPage({
     !selectedArea &&
     !stageView;
 
-  const page = (
-    <div className="issues-page mx-auto w-full max-w-6xl space-y-5">
+  const headerContent = (
+    <>
       {gettingStarted ? <GettingStarted {...gettingStarted} /> : null}
       {activeProject?.goal ? (
         <section aria-labelledby="project-goal-heading" className="rounded-[20px] border border-zk-border bg-zk-surface px-5 py-4">
@@ -895,8 +939,11 @@ export default async function BugsPage({
           {!isDeletedView ? <NewIssueButton className={isFirstRun ? "" : "md:hidden"} /> : null}
         </div>
       </div>
+    </>
+  );
 
-      <div className="space-y-4">
+  const listContent = (
+    <div className="space-y-4">
         {/* Inbox on the left (the escalated issues, formerly the Escalated tab);
             the status tabs sit at the right of the same row. */}
         <div className="issues-tabs-row flex items-center gap-2.5">
@@ -916,11 +963,11 @@ export default async function BugsPage({
           {!isDeletedView ? (
             <nav aria-label="Issue status" className="issues-status-nav ml-auto min-w-0">
               <ul>
-                {[{ value: "open", label: "Open" }, { value: "in_progress", label: "In progress" }, { value: "resolved", label: "Done" }, { value: READY_TO_MERGE_STATUS, label: "Ready to Merge" }, { value: AUTO_MERGE_STATUS, label: "Live" }, { value: ALL_STATUS, label: "All" }].map(({ value, label }) => (
+                {STATUS_TABS.map(({ value, label }) => (
                   <li key={value}>
                     <Link href={statusHref(value)} aria-current={(value === ALL_STATUS ? allSelected : value === statusParam) ? "page" : undefined}>
                       <span className={`issues-status-dot issues-status-${value}`} aria-hidden="true" />
-                      {label}<span className="issues-status-count">{value === ALL_STATUS ? allCount : value === READY_TO_MERGE_STATUS ? readyToMergeCount : value === AUTO_MERGE_STATUS ? liveCount : countForStatus(value)}</span>
+                      {label}<span className="issues-status-count">{tabCount(value)}</span>
                     </Link>
                   </li>
                 ))}
@@ -1253,21 +1300,25 @@ export default async function BugsPage({
           </section>
         )}
       </div>
-    </div>
   );
 
-  if (!canDelete || isDeletedView) return page;
-
   return (
-    <BulkSelectionProvider
-      key={selectionKey}
-      pageIds={bugIds}
-      types={bulkTypes}
-      platforms={bulkPlatforms}
-      users={bulkUsers}
-    >
-      {page}
-    </BulkSelectionProvider>
+    <div className="issues-page mx-auto w-full max-w-6xl space-y-5">
+      {headerContent}
+      {canDelete && !isDeletedView ? (
+        <BulkSelectionProvider
+          key={selectionKey}
+          pageIds={bugIds}
+          types={bulkTypes}
+          platforms={bulkPlatforms}
+          users={bulkUsers}
+        >
+          {listContent}
+        </BulkSelectionProvider>
+      ) : (
+        listContent
+      )}
+    </div>
   );
 }
 

@@ -105,7 +105,7 @@ const mockAgent: AgentContext = {
   keyId: "key-1",
   tenantId: "tenant-1",
   ownerId: "user-1",
-  level: "contributor",
+  level: "working",
   name: "TriageBot",
   burst: true,
 };
@@ -170,29 +170,31 @@ describe("structureIssue execution", () => {
     ]);
   });
 
-  it.each(["contributor", "dispatcher", "merger"] as const)("lets the owner's %s format a report without self-validating", async (level) => {
+  it.each(["working", "manager", "merger"] as const)("lets the owner's %s format a report without self-validating", async (level) => {
     db.bug.findFirst.mockResolvedValue({ id: "bug-1", title: "Report", description: "Original description", categoryId: null, typeId: null, duplicateOfId: null, reporterId: "user-1", beneficiaryUserId: "user-1", createdByAgent: { ownerUserId: "user-1" }, claims: [] });
     const result = await structureIssue({ ...mockAgent, level }, "proj-1", "bug-1", { description: "Clarified reproduction details", checkDuplicates: false });
     expect(result.ok).toBe(true);
     expect(txMock.issueValidation.upsert).not.toHaveBeenCalled();
   });
 
-  it.each(["dispatcher", "merger"] as const)("blocks an owner's %s from marking their report as a duplicate", async (level) => {
+  it.each(["manager", "merger"] as const)("blocks an owner's %s from marking their report as a duplicate", async (level) => {
     db.bug.findFirst.mockResolvedValueOnce({ id: "bug-1", title: "Report", description: "Original description", reporterId: "user-1", beneficiaryUserId: "another-person", createdByAgent: { ownerUserId: "user-1" }, claims: [] }).mockResolvedValueOnce({ id: "canonical" });
     await expect(structureIssue({ ...mockAgent, level }, "proj-1", "bug-1", { duplicateOfId: "canonical" })).rejects.toMatchObject({ status: 403 });
     expect(txMock.bug.update).not.toHaveBeenCalled();
     expect(txMock.issueValidation.upsert).not.toHaveBeenCalled();
   });
 
-  it("blocks contributor triage through the structuring endpoint", async () => {
+  it("lets an independent working agent mark a report as a duplicate through the structuring endpoint", async () => {
     db.bug.findFirst.mockResolvedValueOnce({ id: "bug-1", title: "Report", description: "Original description", reporterId: "another-person", beneficiaryUserId: "another-person", createdByAgent: null, claims: [] }).mockResolvedValueOnce({ id: "canonical" });
-    await expect(structureIssue(mockAgent, "proj-1", "bug-1", { duplicateOfId: "canonical" })).rejects.toMatchObject({ status: 403 });
-    expect(txMock.bug.update).not.toHaveBeenCalled();
+    const result = await structureIssue(mockAgent, "proj-1", "bug-1", { duplicateOfId: "canonical", checkDuplicates: false });
+    expect(result.ok).toBe(true);
+    expect(txMock.bug.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ duplicateOfId: "canonical" }) }));
+    expect(txMock.issueValidation.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ kind: "duplicate", verdict: "accept" }) }));
   });
 
   it("records format validation for an independent reviewer", async () => {
     db.bug.findFirst.mockResolvedValue({ id: "bug-1", title: "Report", description: "Original description", categoryId: null, typeId: null, duplicateOfId: null, reporterId: "another-person", beneficiaryUserId: "another-person", createdByAgent: null, claims: [] });
-    await structureIssue({ ...mockAgent, level: "reviewer" }, "proj-1", "bug-1", { description: "Structured description", checkDuplicates: false });
+    await structureIssue({ ...mockAgent, level: "working" }, "proj-1", "bug-1", { description: "Structured description", checkDuplicates: false });
     expect(txMock.issueValidation.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ kind: "format", verdict: "accept" }) }));
   });
 
@@ -235,7 +237,9 @@ describe("structureIssue execution", () => {
         }),
       }),
     );
-    expect(txMock.issueValidation.upsert).not.toHaveBeenCalled();
+    // Any working agent independent of the reporter records the format validation.
+    expect(txMock.issueValidation.upsert).toHaveBeenCalledTimes(1);
+    expect(txMock.issueValidation.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ kind: "format", verdict: "accept" }) }));
     expect(txMock.bugActivity.create).toHaveBeenCalledTimes(1);
     expect(publish).toHaveBeenCalledWith(
       txMock,

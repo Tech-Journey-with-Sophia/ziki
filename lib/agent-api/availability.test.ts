@@ -11,14 +11,13 @@ const db = vi.hoisted(() => ({
   agentQuestion: { findFirst: vi.fn(), updateMany: vi.fn() },
   bug: { updateMany: vi.fn(), findFirst: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn(),
 }));
-const mocks = vi.hoisted(() => ({ admin: vi.fn(), budget: vi.fn(), demote: vi.fn(), notifyLater: vi.fn(), workflow: vi.fn() }));
+const mocks = vi.hoisted(() => ({ admin: vi.fn(), budget: vi.fn(), notifyLater: vi.fn(), workflow: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/workflow", async (original) => ({
   ...await original<typeof import("@/lib/workflow")>(),
   workflowFor: mocks.workflow,
 }));
 vi.mock("@/lib/auth-helpers", () => ({ requireSuperAdmin: mocks.admin }));
-vi.mock("@/lib/agents/promotion", () => ({ demoteFromSilence: mocks.demote }));
 vi.mock("@/lib/agents/rate-budget", async (original) => ({ ...await original<typeof import("@/lib/agents/rate-budget")>(), consumeAgentBudget: mocks.budget }));
 vi.mock("@/lib/notify", () => ({ notifyLater: mocks.notifyLater }));
 import { releaseStaleClaims, sweepStaleClaims } from "./availability";
@@ -37,7 +36,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   // setTimeout is faked so the re-offer's expiry timer is armed but never fires.
   vi.useFakeTimers({ toFake: ["Date", "setTimeout"] }); vi.setSystemTime(now);
-  db.agentApiKey.findUnique.mockResolvedValue({ id: "key", revokedAt: null, agent: { id: "agent", name: "Agent", ownerUserId: "owner", tenantId: "tenant", level: "contributor", burst: false, revokedAt: null, owner: { memberships: [{ tenantId: "tenant" }] } } });
+  db.agentApiKey.findUnique.mockResolvedValue({ id: "key", revokedAt: null, agent: { id: "agent", name: "Agent", ownerUserId: "owner", tenantId: "tenant", level: "working", burst: false, revokedAt: null, owner: { memberships: [{ tenantId: "tenant" }] } } });
   db.project.findFirst.mockResolvedValue({ id: "project" });
   db.project.findUnique.mockResolvedValue({ id: "project", tenantId: "tenant" });
   db.$queryRaw.mockResolvedValue([{ id: "issue" }]);
@@ -56,7 +55,6 @@ beforeEach(() => {
   mocks.admin.mockResolvedValue({ id: "admin" });
   mocks.budget.mockResolvedValue({ allowed: true });
   mocks.workflow.mockResolvedValue(DEFAULT_PROJECT_WORKFLOW);
-  mocks.demote.mockResolvedValue({ ok: true, changed: false, releases: 1 });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -103,11 +101,8 @@ describe("claim heartbeats", () => {
     expect(db.issueClaim.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { bugId: "issue", releasedAt: null } }));
     expect(db.issueClaim.update).not.toHaveBeenCalled();
   });
-  it("enforces authentication, contributor level, project scope and write budget", async () => {
+  it("enforces authentication, project scope and write budget; any working agent may heartbeat", async () => {
     expect((await POST(request("", false), context)).status).toBe(401);
-    const key = await db.agentApiKey.findUnique();
-    db.agentApiKey.findUnique.mockResolvedValueOnce({ ...key, agent: { ...key.agent, level: "observer" } });
-    expect((await POST(request(), context)).status).toBe(403);
     expect((await POST(request(""), context)).status).toBe(400);
     db.project.findFirst.mockResolvedValueOnce(null);
     expect((await POST(request(), context)).status).toBe(404);
@@ -135,7 +130,6 @@ describe("stale claim release", () => {
     }) }));
     expect(db.bug.updateMany).toHaveBeenCalledWith({ where: { id: "issue", projectId: "project", tenantId: "tenant", isDeleted: false, assigneeId: "owner", status: "in_progress" }, data: { assigneeId: null, status: "open" } });
     expect(db.agentAuditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "claim.released", agentId: "agent", actorUserId: "admin", bugId: "issue", payload: { claimId: "claim", reason: "silence", projectId: "project" } }) });
-    expect(mocks.demote).toHaveBeenCalledWith("agent", db, now);
     expect(db.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(db.issueClaim.findFirst.mock.invocationCallOrder[0]);
   });
   it("does not release a silent claim whose fix is already linked (#551)", async () => {
@@ -194,7 +188,6 @@ describe("stale claim release", () => {
       action: "claim.released",
       payload: { claimId: "claim", reason: "deadline", projectId: "project" },
     }) });
-    expect(mocks.demote).toHaveBeenCalledWith("agent", db, now);
   });
 
   it("counts the deadline boundary as overdue but leaves one millisecond after it alone", async () => {
@@ -344,7 +337,6 @@ describe("claims waiting on the owner's answer (#606)", () => {
     expect(db.issueClaim.update).toHaveBeenCalledWith({ where: { id: "claim" }, data: { status: "released", releasedAt: now, releaseReason: "owner_unresponsive" } });
     expect(db.agentEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       type: "claim.released", payload: expect.objectContaining({ reason: "owner_unresponsive" }) }) }));
-    expect(mocks.demote).not.toHaveBeenCalled();
   });
 
   it("uses the project's cap", async () => {

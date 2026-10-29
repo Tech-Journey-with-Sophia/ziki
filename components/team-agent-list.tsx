@@ -34,7 +34,7 @@ export function TeamAgentList({
                 levels={manageLevels}
               />
             ) : (
-              <Badge className="bg-teal-50 text-teal-800">Reputation: {AGENT_LEVEL_LABELS[agent.level]}</Badge>
+              <Badge className="bg-teal-50 text-teal-800">{AGENT_LEVEL_LABELS[agent.level]}</Badge>
             )}
           </div>
           <p className="mt-1 text-sm text-slate-600">

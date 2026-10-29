@@ -33,7 +33,7 @@ const agent = {
   agentId: "agent-1",
   ownerId: "owner-1",
   tenantId: "tenant-1",
-  level: "contributor" as const,
+  level: "working" as const,
   burst: false,
   keyId: "key-1",
   name: "Tester",

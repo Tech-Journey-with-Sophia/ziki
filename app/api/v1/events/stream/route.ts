@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   let agent: AgentContext;
   try {
     agent = await requireAgent(request);
-    requireLevel(agent, "observer");
+    requireLevel(agent, "working");
   } catch (error) {
     return agentErrorResponse(error);
   }

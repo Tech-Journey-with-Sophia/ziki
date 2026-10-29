@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { decodePointCursor, pointEntries, pointEntriesQuerySchema } from "@/lib/points/entries";
 
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "points.entries", "observer", null, async agent => {
+  return agentIssueRequest(request, "points.entries", "read", null, async agent => {
     const parsed = pointEntriesQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) return NextResponse.json({ error: "Invalid ledger query.", details: parsed.error.issues }, { status: 400 });
     if (parsed.data.cursor) {

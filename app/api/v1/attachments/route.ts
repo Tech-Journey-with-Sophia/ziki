@@ -22,7 +22,7 @@ export const runtime = "nodejs";
  * 201 `{ id, filename, contentType, size }`.
  */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "attachments.upload", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "attachments.upload", "working", null, async (agent) => {
     // Bound the body while reading it: a chunked request declares no length,
     // so the cap has to be enforced on the stream (#485).
     const body = await readLimitedMultipart(request, MAX_ATTACHMENT_BYTES + MULTIPART_OVERHEAD_BYTES);

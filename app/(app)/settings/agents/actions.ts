@@ -183,7 +183,7 @@ export async function pairAgentAction(
     code,
     name: pending.proposedName,
     model: pending.proposedModel,
-    level: pending.proposedLevel ?? "contributor",
+    level: pending.proposedLevel ?? "working",
     instructions: pending.proposedInstructions,
   };
 }

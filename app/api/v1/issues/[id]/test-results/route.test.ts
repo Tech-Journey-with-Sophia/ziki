@@ -15,7 +15,7 @@ vi.mock("@/lib/agent-api/test-verdict", () => ({ submitTestVerdict: mocks.submit
 import { AgentAuthError } from "@/lib/agents/require-agent";
 import { POST } from "./route";
 
-const agent = { agentId: "r1", name: "r1", ownerId: "rob", tenantId: "tenant", level: "reviewer", burst: false, keyId: "k" };
+const agent = { agentId: "r1", name: "r1", ownerId: "rob", tenantId: "tenant", level: "working", burst: false, keyId: "k" };
 const params = { params: Promise.resolve({ id: "bug1" }) };
 
 function request(body: unknown = { goodToMerge: true }, key = true) {

@@ -18,7 +18,7 @@ vi.mock("@/lib/agents/rate-budget", async (original) => ({
 
 import { GET, POST } from "./route";
 
-function makeKey(level: "observer" | "contributor" | "reviewer" | "merger" | "admin_merger" = "merger") {
+function makeKey(level: "working" | "manager" | "merger" = "manager") {
   return {
     id: `key-${level}`,
     revokedAt: null,
@@ -57,8 +57,8 @@ describe("GET /api/v1/projects/[id]/mistakes", () => {
     db.webhookSubscription.findMany.mockResolvedValue([]);
   });
 
-  it("lists project mistakes for observer agents", async () => {
-    db.agentApiKey.findUnique.mockResolvedValue(makeKey("observer"));
+  it("lists project mistakes for any working agent", async () => {
+    db.agentApiKey.findUnique.mockResolvedValue(makeKey("working"));
     db.agentMistake.findMany.mockResolvedValue([
       {
         id: "m-1",
@@ -88,8 +88,8 @@ describe("POST /api/v1/projects/[id]/mistakes", () => {
     db.webhookSubscription.findMany.mockResolvedValue([]);
   });
 
-  it("rejects non-merger agents with 403", async () => {
-    db.agentApiKey.findUnique.mockResolvedValue(makeKey("contributor"));
+  it("rejects working agents with 403: recording a mistake needs a manager agent", async () => {
+    db.agentApiKey.findUnique.mockResolvedValue(makeKey("working"));
     const context = { params: Promise.resolve({ id: "proj-1" }) };
     const res = await POST(
       request("http://localhost/api/v1/projects/proj-1/mistakes", "POST", {
@@ -104,8 +104,8 @@ describe("POST /api/v1/projects/[id]/mistakes", () => {
     expect(body.error).toBe("insufficient_level");
   });
 
-  it("creates a new mistake when merger posts valid input", async () => {
-    db.agentApiKey.findUnique.mockResolvedValue(makeKey("merger"));
+  it("creates a new mistake when a manager agent posts valid input", async () => {
+    db.agentApiKey.findUnique.mockResolvedValue(makeKey("manager"));
     db.agentMistake.findFirst.mockResolvedValue(null);
     db.agentMistake.create.mockResolvedValue({
       id: "m-new",

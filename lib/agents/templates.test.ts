@@ -7,16 +7,25 @@ import {
   mcpConfigTemplate,
   getAgentTemplates,
 } from "./templates";
+import { WATCH_WORK_MESSAGE } from "./pairing-link";
 
 describe("Agent Onboarding Templates (#610)", () => {
   const origin = "https://ziki.dev";
   const projectId = "proj_alpha";
   const projectName = "Alpha Project";
 
-  it.each([claudePromptTemplate, chatGptPromptTemplate])("offers only specialist roles during pairing (%#)", (template) => {
+  it.each([claudePromptTemplate, chatGptPromptTemplate])("tells the agent to watch its work feed (%#)", (template) => {
     const prompt = template({ origin, projectId, projectName });
-    expect(prompt).toContain("observer | contributor | triager | reviewer —");
-    expect(prompt).not.toContain("reviewer | dispatcher");
+    expect(prompt).toContain(WATCH_WORK_MESSAGE);
+    expect(prompt).toContain("https://ziki.dev/<project-slug>/work");
+    expect(prompt).toContain("canAct");
+    expect(prompt).not.toContain("/api/v1/events");
+  });
+
+  it.each([claudePromptTemplate, chatGptPromptTemplate])("pairs as a working agent, with no old role names (%#)", (template) => {
+    const prompt = template({ origin, projectId, projectName });
+    expect(prompt).toContain("every agent joins as a working agent");
+    expect(prompt).not.toMatch(/observer|contributor|triager|dispatcher/);
   });
 
   describe("claudePromptTemplate", () => {
@@ -58,8 +67,18 @@ describe("Agent Onboarding Templates (#610)", () => {
       expect(script).toContain("/api/v1/agents/pairing");
       expect(script).toContain("/api/v1/agents/pairing/token");
       expect(script).toContain("/api/v1/agents/me");
-      expect(script).toContain("/api/v1/events");
       expect(script).not.toContain("ziki_ak_");
+    });
+
+    it("watches the work feed from work_url with If-None-Match and prints what it can act on", () => {
+      const script = nodeScriptTemplate({ origin, projectId, projectName });
+      expect(script).toContain("me.work_url");
+      expect(script).toContain("/work");
+      expect(script).toContain('"If-None-Match"');
+      expect(script).toContain("res.status !== 304");
+      expect(script).toContain("feed.pollAfterSeconds || 30");
+      expect(script).toContain("item.canAct");
+      expect(script).not.toContain("/api/v1/events");
     });
   });
 
@@ -71,9 +90,18 @@ describe("Agent Onboarding Templates (#610)", () => {
       expect(script).toContain("/api/v1/agents/pairing");
       expect(script).toContain("/api/v1/agents/pairing/token");
       expect(script).toContain("/api/v1/agents/me");
-      expect(script).toContain("/api/v1/events");
       expect(script).toContain("import urllib.request");
       expect(script).not.toContain("ziki_ak_");
+    });
+
+    it("watches the work feed from work_url with If-None-Match and prints what it can act on", () => {
+      const script = pythonScriptTemplate({ origin, projectId, projectName });
+      expect(script).toContain('me.get("work_url")');
+      expect(script).toContain('"If-None-Match"');
+      expect(script).toContain("e.code == 304");
+      expect(script).toContain('feed.get("pollAfterSeconds") or 30');
+      expect(script).toContain('item.get("canAct")');
+      expect(script).not.toContain("/api/v1/events");
     });
   });
 

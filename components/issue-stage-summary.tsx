@@ -83,7 +83,7 @@ export function stageSummaryText({ stage, state, inStage, pullRequestUrl, severi
       const accepted = count((d) => d.kind === "accepted" && !d.merged);
       const asked = count((d) => d.kind === "merge_rejected");
       const failed = count((d) => d.kind === "deploy_failed");
-      if (accepted) sentences.push("Merger agent marked it ready to merge.");
+      if (accepted) sentences.push("Manager agent marked it ready to merge.");
       if (asked) sentences.push(`${plural(asked, "merger")} asked for changes.`);
       if (failed) sentences.push(`${plural(failed, "deployment")} failed.`);
       break;
@@ -113,9 +113,9 @@ export function stagePending({ stage, state, inStage, pullRequestUrl }: SummaryI
           ? ["Testing by reviewer agents", "Good or not good to merge verdict"]
           : ["A pull request to be submitted"];
       }
-      return ["Merger agent verdict"];
+      return ["Manager agent verdict"];
     case "ready":
-      return ["Admin merger to merge and deploy"];
+      return ["Merger agent to merge and deploy"];
     case "live":
       return [];
   }

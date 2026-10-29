@@ -15,7 +15,7 @@ vi.mock("@/lib/agents/rate-budget", async (original) => ({
 
 import { GET } from "./route";
 
-function key(level = "observer") {
+function key(level = "working") {
   return {
     id: "key-a",
     revokedAt: null,

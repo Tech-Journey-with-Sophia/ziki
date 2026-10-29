@@ -4,7 +4,6 @@ import { requireSuperAdmin } from "@/lib/auth-helpers";
 import type { AgentContext } from "@/lib/agents/require-agent";
 import { audit, type AuditAgent } from "@/lib/agents/audit";
 import { IssueApiError } from "@/lib/agent-api/issues";
-import { demoteFromSilence } from "@/lib/agents/promotion";
 import { publish } from "@/lib/agent-api/events";
 import { notifyAgentQuestion, notifyClaimOffered } from "@/lib/agent-notifications";
 import { offerNext, scheduleOfferExpiry } from "@/lib/agent-api/offer";
@@ -124,8 +123,6 @@ async function releaseClaimIfStale(
       payload: { claimId: fresh.id, issueId: fresh.bugId, projectId, beneficiaryUserId: fresh.beneficiaryUserId, reason } });
     await audit({ agentId: fresh.agentId, tenantId } satisfies AuditAgent, "claim.released", fresh.bugId,
       { claimId: fresh.id, reason, projectId }, { db: tx, bugId: fresh.bugId, actorUserId: options.actorUserId ?? null });
-    // The owner's silence is not the agent's: no mark against its reputation.
-    if (reason !== "owner_unresponsive") await demoteFromSilence(fresh.agentId, tx, now);
     const otherClaim = await tx.issueClaim.count({ where: { bugId: fresh.bugId, releasedAt: null, id: { not: fresh.id } } });
     let reopened = false;
     // Preserve a human's later reassignment or resolution and any newer claim.

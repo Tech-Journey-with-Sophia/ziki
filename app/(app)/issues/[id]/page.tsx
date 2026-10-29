@@ -127,14 +127,14 @@ async function loadOptional<T>(label: string, fallback: T, load: () => Promise<T
   }
 }
 
-/** A merger rejection's notes (#1429), from its audit payload. */
+/** A manager agent's rejection notes (#1429), from its audit payload. */
 function payloadNotes(payload: unknown): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const notes = (payload as { notes?: unknown }).notes;
   return typeof notes === "string" && notes.trim() ? notes : null;
 }
 
-/** Why an admin merger's deployment failed (#1446), from its audit payload. */
+/** Why a merger agent's deployment failed (#1446), from its audit payload. */
 function payloadReason(payload: unknown): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const reason = (payload as { reason?: unknown }).reason;
@@ -536,8 +536,8 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
                 onBehalfOf: { select: { name: true } },
               },
             }),
-            // #1429: a merger's rejection is a merge decision too, and #1446 an
-            // admin merger's failed deployment.
+            // #1429: a manager agent's rejection is a merge decision too, and #1446 a
+            // merger agent's failed deployment.
             prisma.agentAuditEvent.findMany({
               where: { bugId: id, action: { in: ["issue.accepted", "issue.merge_rejected", "github.merge_failed"] } },
               orderBy: { createdAt: "asc" },
@@ -552,7 +552,7 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
           ]);
 
           const mergerDecisions: AgentDecision[] = accepted
-            .filter((e) => e.agent.level === "merger" || e.agent.level === "admin_merger")
+            .filter((e) => e.agent.level === "manager" || e.agent.level === "merger")
             .map<AgentDecision>((e) =>
               e.action === "issue.merge_rejected"
                 ? {
@@ -638,7 +638,7 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
             ...accepted
               .filter(
                 (e) =>
-                  e.action === "issue.accepted" && e.agent.level !== "merger" && e.agent.level !== "admin_merger",
+                  e.action === "issue.accepted" && e.agent.level !== "manager" && e.agent.level !== "merger",
               )
               .map<AgentDecision>((e) => ({
                 id: `accepted-${e.id}`,

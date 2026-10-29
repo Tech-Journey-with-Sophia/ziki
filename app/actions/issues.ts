@@ -1735,6 +1735,11 @@ export async function deleteBugAction(bugId: string): Promise<ActionResult> {
           deletedAt: new Date(),
         },
       });
+      // Release any unreleased claims on the soft-deleted issue (#627)
+      await tx.issueClaim.updateMany({
+        where: { bugId, releasedAt: null, status: { in: ["active", "offered"] } },
+        data: { status: "released", releasedAt: new Date(), releaseReason: "deleted" },
+      });
       // Delete attachments associated with the issue to prevent storage bloat (#658)
       await tx.attachment.deleteMany({ where: { bugId } });
 

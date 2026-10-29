@@ -85,7 +85,7 @@ export function AgentControls({
     startTransition(async () => {
       const result = await setAgentLevelAction(agentId, next);
       if (result.ok) {
-        toast(`${agentName} is now ${AGENT_LEVEL_LABELS[next].toLowerCase()}.`, "success");
+        toast(`${agentName} is now a ${AGENT_LEVEL_LABELS[next].toLowerCase()}.`, "success");
       } else {
         setCurrent(previous);
         toast(result.error, "error");
@@ -227,7 +227,7 @@ export function AgentControls({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={`level-${agentId}`} className="sr-only">
-          Level for {agentName}
+          Agent class for {agentName}
         </label>
         <Select
           id={`level-${agentId}`}

@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 /** GET ?projectId= — every live allocation slice carved from the goal's pool (#616). */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "goals.allocations.list", "observer", id, async (agent) => {
+  return agentIssueRequest(request, "goals.allocations.list", "read", id, async (agent) => {
     await issueProject(agent, request.nextUrl.searchParams);
     const { allocations } = await readGoal(agent, id);
     return NextResponse.json({ allocations });
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "goals.split", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "goals.split", "working", id, async (agent) => {
     const parsed = splitGoalPoolSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid split request.", details: parsed.error.issues }, { status: 400 });

@@ -139,7 +139,7 @@ export async function sweepPendingBids(options?: {
             beneficiaryUserId: bid.beneficiaryUserId,
             status: "active",
             releasedAt: null,
-            bug: { tenantId: issue.tenantId, projectId: issue.projectId },
+            bug: { tenantId: issue.tenantId, projectId: issue.projectId, isDeleted: false },
           },
         });
 
@@ -148,7 +148,7 @@ export async function sweepPendingBids(options?: {
           where: {
             beneficiaryUserId: bid.beneficiaryUserId,
             claimedAt: { not: null },
-            bug: { tenantId: issue.tenantId, projectId: issue.projectId },
+            bug: { tenantId: issue.tenantId, projectId: issue.projectId, isDeleted: false },
           },
         });
 

@@ -22,7 +22,7 @@ const agent = {
   name: "Ada's Claude",
   ownerId: "ada",
   tenantId: "tenant",
-  level: "contributor" as const,
+  level: "working" as const,
   burst: false,
   keyId: "key-ada",
 };

@@ -8,7 +8,7 @@ import { listAgentProjects } from "@/lib/agent-api/projects";
  * The agent's first call after pairing: it returns the `projectId` every
  * issue route requires. */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "projects.list", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "projects.list", "read", null, async (agent) => {
     return NextResponse.json({ items: await listAgentProjects(agent.tenantId) });
   });
 }

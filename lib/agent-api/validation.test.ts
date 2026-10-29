@@ -18,7 +18,6 @@ const state = vi.hoisted(() => ({
   validations: [] as Row[],
   agents: {} as Record<string, { id: string; ownerUserId: string; level?: string }>,
 }));
-const promotion = vi.hoisted(() => ({ promoteEarnedReviewer: vi.fn() }));
 const notifications = vi.hoisted(() => ({ notifyClaimOffered: vi.fn() }));
 
 const db = vi.hoisted(() => ({
@@ -38,7 +37,6 @@ const db = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/lib/agents/promotion", () => promotion);
 vi.mock("@/lib/agent-notifications", () => notifications);
 vi.mock("@/lib/redesigns", () => ({
   assertRedesignOpen: vi.fn(),
@@ -69,7 +67,7 @@ function bugRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function reviewer(id: string, ownerId: string, level: AgentLevel = "reviewer") {
+function reviewer(id: string, ownerId: string, level: AgentLevel = "working") {
   state.agents[id] = { id, ownerUserId: ownerId, level };
   return { agentId: id, name: id, ownerId, tenantId: "tenant_zedu", level, burst: false, keyId: `key-${id}` };
 }
@@ -101,7 +99,6 @@ beforeEach(() => {
   db.webhookSubscription.findMany.mockResolvedValue([]);
   db.webhookDelivery.createMany.mockResolvedValue({ count: 0 });
   db.projectWorkflow.findUnique.mockResolvedValue(null);
-  promotion.promoteEarnedReviewer.mockResolvedValue({ ok: true, changed: false, standing: 1 });
   db.bugRevision.findFirst.mockResolvedValue(null);
   db.issueValidation.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
     state.validations
@@ -160,7 +157,7 @@ describe("submitValidation: project confirmation count (#595)", () => {
       status: 201,
       confirmed: false,
     });
-    await submitValidation(reviewer("t1", "tia", "triager"), "bug1", clearTriage);
+    await submitValidation(reviewer("t1", "tia", "working"), "bug1", clearTriage);
     expect(await submitValidation(reviewer("r3", "kim"), "bug1", acceptReal)).toMatchObject({
       status: 201,
       confirmed: true,
@@ -202,7 +199,7 @@ describe("submitValidation: readable issue references (#614)", () => {
 
 describe("recorded confirmation independence (#579)", () => {
   it.each(["beneficiaryUserId", "dispatcherUserId"] as const)("preserves reviews and clearance credited to a later claim's %s", async (claimRole) => {
-    await submitValidation(reviewer("t1", "tia", "triager"), "bug1", { ...clearTriage, onBehalfOfUserId: "credited-triager" });
+    await submitValidation(reviewer("t1", "tia", "working"), "bug1", { ...clearTriage, onBehalfOfUserId: "credited-triager" });
     await submitValidation(reviewer("r1", "rob"), "bug1", { ...acceptReal, onBehalfOfUserId: "credited-reviewer" });
     // A clearance plus only one independent real accept must still fail.
     expect(await isConfirmed("bug1")).toBe(false);
@@ -222,8 +219,8 @@ describe("recorded confirmation independence (#579)", () => {
 
 describe("submitValidation: who may validate (#433)", () => {
   it.each([
-    ["real accept", "reviewer", acceptReal],
-    ["triage clearance", "triager", clearTriage],
+    ["real accept", "working", acceptReal],
+    ["triage clearance", "working", clearTriage],
   ] as const)("rejects a raced %s when the issue is deleted before the lock (#579)", async (_label, level, body) => {
     db.bug.findUnique.mockResolvedValue(bugRow({ isDeleted: true }));
 
@@ -245,8 +242,8 @@ describe("submitValidation: who may validate (#433)", () => {
   });
 
   it.each([
-    ["real accept", "reviewer", acceptReal],
-    ["triage clearance", "triager", clearTriage],
+    ["real accept", "working", acceptReal],
+    ["triage clearance", "working", clearTriage],
   ] as const)("rejects a raced %s when the owner or credited person becomes the solver (#579)", async (_label, level, body) => {
     for (const conflictedUser of ["rob", "credited-person"]) {
       for (const relationship of ["assignment", "claim"] as const) {
@@ -265,31 +262,30 @@ describe("submitValidation: who may validate (#433)", () => {
     expect(state.validations).toHaveLength(0);
   });
 
-  it.each(["reviewer", "triager"] as const)("blocks the assigned owner's %s even with independent credit", async (level) => {
+  it.each([
+    ["real accept", acceptReal],
+    ["triage clearance", clearTriage],
+  ] as const)("blocks the assigned owner's %s even with independent credit", async (_label, body) => {
     db.bug.findFirst.mockResolvedValue(bugRow({ assigneeId: "rob" }));
-    const body = level === "triager" ? clearTriage : acceptReal;
-    expect(await submitValidation(reviewer("other-agent", "rob", level), "bug1", { ...body, onBehalfOfUserId: "another-person" })).toMatchObject({ status: 403, error: "not_independent" });
+    expect(await submitValidation(reviewer("other-agent", "rob"), "bug1", { ...body, onBehalfOfUserId: "another-person" })).toMatchObject({ status: 403, error: "not_independent" });
     expect(state.validations).toHaveLength(0);
   });
 
-  it.each(["reviewer", "triager"] as const)("blocks a filer's other %s agent from reviewing or triaging", async (level) => {
+  it.each([
+    ["real accept", acceptReal],
+    ["triage clearance", clearTriage],
+  ] as const)("blocks a filer's other agent from a %s", async (_label, body) => {
     db.bug.findFirst.mockResolvedValue(bugRow({ reporterId: "rob", beneficiaryUserId: "another-person", createdByAgentId: "filing-agent", createdByAgent: { ownerUserId: "rob" } }));
-    const body = level === "triager" ? clearTriage : acceptReal;
-    expect(await submitValidation(reviewer("other-agent", "rob", level), "bug1", body)).toMatchObject({ status: 403, error: "not_independent" });
+    expect(await submitValidation(reviewer("other-agent", "rob"), "bug1", body)).toMatchObject({ status: 403, error: "not_independent" });
     expect(state.validations).toHaveLength(0);
   });
 
-  it.each(["contributor", "dispatcher", "merger", "admin_merger"] as const)("rejects a %s before touching the issue", async (level) => {
-    const result = await submitValidation(reviewer("c1", "cara", level), "bug1", acceptReal);
-    expect(result).toMatchObject({ status: 403, error: "insufficient_level" });
-    expect(db.bug.findFirst).not.toHaveBeenCalled();
+  it.each(["working", "manager", "merger"] as const)("lets a %s agent validate: every class reviews", async (level) => {
+    expect(await submitValidation(reviewer("c1", "cara", level), "bug1", acceptReal)).toMatchObject({ status: 201 });
   });
 
   it("does not run the write-budget gate for permission refusals", async () => {
     const budgetGate = vi.fn(async () => true);
-
-    expect(await submitValidation(reviewer("c1", "cara", "contributor"), "bug1", acceptReal, budgetGate))
-      .toMatchObject({ status: 403, error: "insufficient_level" });
 
     db.bug.findFirst.mockResolvedValue(bugRow({ createdByAgentId: "r1" }));
     expect(await submitValidation(reviewer("r1", "rob"), "bug1", acceptReal, budgetGate))
@@ -447,7 +443,7 @@ describe("submitValidation: the body (#433)", () => {
 
   it("lets a duplicate verdict point at the canonical issue in the same tenant", async () => {
     db.bug.findFirst.mockResolvedValueOnce(bugRow()).mockResolvedValueOnce({ id: "bug0" });
-    const result = await submitValidation(reviewer("r1", "rob", "triager"), "bug1", {
+    const result = await submitValidation(reviewer("r1", "rob", "working"), "bug1", {
       kind: "duplicate",
       verdict: "accept",
       duplicateOfId: "bug0",
@@ -457,7 +453,7 @@ describe("submitValidation: the body (#433)", () => {
 
     db.bug.findFirst.mockResolvedValue(bugRow());
     expect(
-      await submitValidation(reviewer("r2", "sam", "triager"), "bug1", { kind: "duplicate", verdict: "accept", duplicateOfId: "bug1" }),
+      await submitValidation(reviewer("r2", "sam", "working"), "bug1", { kind: "duplicate", verdict: "accept", duplicateOfId: "bug1" }),
     ).toMatchObject({ status: 400, field: "duplicateOfId" });
   });
 
@@ -478,13 +474,12 @@ describe("submitValidation: the body (#433)", () => {
       target: "bug:bug1",
       bugId: "bug1",
     });
-    expect(promotion.promoteEarnedReviewer).toHaveBeenCalledWith("r1", db);
   });
 });
 
 describe("confirmation: the two-reviewer rule (#433)", () => {
   it("publishes issue.confirmed when the second accept confirms the issue (#534)", async () => {
-    await submitValidation(reviewer("t1", "tia", "triager"), "bug1", clearTriage);
+    await submitValidation(reviewer("t1", "tia", "working"), "bug1", clearTriage);
     await submitValidation(reviewer("r1", "rob"), "bug1", acceptReal);
     await submitValidation(reviewer("r2", "sam"), "bug1", acceptReal);
     const types = (db.agentEvent.create.mock.calls as Array<[{ data: { type: string } }]>).map(
@@ -501,7 +496,7 @@ describe("confirmation: the two-reviewer rule (#433)", () => {
     const reviewerOne = reviewer("r1", "rob");
     const reviewerTwo = reviewer("r2", "sam");
 
-    await submitValidation(reviewer("t1", "tia", "triager"), "bug1", clearTriage);
+    await submitValidation(reviewer("t1", "tia", "working"), "bug1", clearTriage);
     await submitValidation(reviewerOne, "bug1", acceptReal);
     const result = await submitValidation(reviewerTwo, "bug1", acceptReal);
 
@@ -535,7 +530,7 @@ describe("confirmation: the two-reviewer rule (#433)", () => {
   });
 
   it("one accepting reviewer does not confirm; two do, and the reporter is paid once", async () => {
-    await submitValidation(reviewer("t1", "tia", "triager"), "bug1", clearTriage);
+    await submitValidation(reviewer("t1", "tia", "working"), "bug1", clearTriage);
     const first = await submitValidation(reviewer("r1", "rob"), "bug1", acceptReal);
     expect(first).toMatchObject({ status: 201, confirmed: false, newlyConfirmed: false });
     expect(await isConfirmed("bug1")).toBe(false);
@@ -606,7 +601,7 @@ describe("confirmation: the two-reviewer rule (#433)", () => {
   });
 
   it("keeps a reviewer's accept after their owner's agent later claims the issue (#579)", async () => {
-    await submitValidation(reviewer("t1", "tia", "triager"), "bug1", clearTriage);
+    await submitValidation(reviewer("t1", "tia", "working"), "bug1", clearTriage);
     await submitValidation(reviewer("r1", "rob"), "bug1", acceptReal);
     await submitValidation(reviewer("r2", "sam"), "bug1", acceptReal);
     expect(await isConfirmed("bug1")).toBe(true);
@@ -622,8 +617,8 @@ describe("confirmation: the two-reviewer rule (#433)", () => {
   });
 
   it("pays no reporter points on a duplicate", async () => {
-    await submitValidation(reviewer("r3", "tia", "triager"), "bug1", { kind: "duplicate", verdict: "accept" });
-    await submitValidation(reviewer("t1", "kay", "triager"), "bug1", clearTriage);
+    await submitValidation(reviewer("r3", "tia", "working"), "bug1", { kind: "duplicate", verdict: "accept" });
+    await submitValidation(reviewer("t1", "kay", "working"), "bug1", clearTriage);
     await submitValidation(reviewer("r1", "rob"), "bug1", acceptReal);
     const second = await submitValidation(reviewer("r2", "sam"), "bug1", acceptReal);
     expect(second).toMatchObject({ confirmed: true, newlyConfirmed: true });
@@ -668,7 +663,7 @@ describe("confirmation: the two-reviewer rule (#433)", () => {
     state.agents = {
       r1: { id: "r1", ownerUserId: "rob" },
       r2: { id: "r2", ownerUserId: "sam" },
-      t1: { id: "t1", ownerUserId: "tia", level: "triager" },
+      t1: { id: "t1", ownerUserId: "tia", level: "working" },
     };
 
     // Initially confirmed
@@ -693,11 +688,11 @@ describe("confirmation: the two-reviewer rule (#433)", () => {
   });
 });
 
-describe("confirmation: the triage clearance (triager)", () => {
+describe("confirmation: the triage clearance", () => {
   it.each(["real", "duplicate"])("ignores historical %s validations credited to the issue owner", async (kind) => {
     reviewer("r1", "rob");
     reviewer("r2", "sam");
-    reviewer("t1", "tia", "triager");
+    reviewer("t1", "tia", "working");
     state.validations = [
       { id: "v1", bugId: "bug1", agentId: "r1", kind: "real", verdict: "accept", severity: "high", duplicateOfId: null, onBehalfOfUserId: kind === "real" ? "ada" : "rob" },
       { id: "v2", bugId: "bug1", agentId: "r2", kind: "real", verdict: "accept", severity: "high", duplicateOfId: null, onBehalfOfUserId: "sam" },
@@ -705,44 +700,20 @@ describe("confirmation: the triage clearance (triager)", () => {
     ];
     expect(await isConfirmed("bug1")).toBe(false);
   });
-  it("needs a triager's not-a-duplicate verdict on top of the two accepts", async () => {
+  it("needs a not-a-duplicate verdict on top of the two accepts", async () => {
     await submitValidation(reviewer("r1", "rob"), "bug1", acceptReal);
     await submitValidation(reviewer("r2", "sam"), "bug1", acceptReal);
     expect(await isConfirmed("bug1")).toBe(false);
 
-    const clear = await submitValidation(reviewer("t1", "tia", "triager"), "bug1", clearTriage);
+    const clear = await submitValidation(reviewer("t1", "tia", "working"), "bug1", clearTriage);
     expect(clear).toMatchObject({ status: 201, confirmed: true, newlyConfirmed: true });
     expect(await isConfirmed("bug1")).toBe(true);
   });
 
-  it("lets a triager submit duplicate verdicts but no other kinds", async () => {
-    const t = reviewer("t1", "tia", "triager");
+  it.each(["working", "manager", "merger"] as const)("lets a %s agent clear triage and give any other verdict", async (level) => {
+    const t = reviewer("t1", "tia", level);
     expect(await submitValidation(t, "bug1", clearTriage)).toMatchObject({ status: 201 });
-    expect(await submitValidation(t, "bug1", acceptReal)).toMatchObject({
-      status: 403,
-      error: "insufficient_level",
-    });
-  });
-
-  it("does not let a reviewer perform a triager's duplicate assessment", async () => {
-    expect(await submitValidation(reviewer("r3", "kim"), "bug1", clearTriage)).toMatchObject({ status: 403, error: "insufficient_level" });
-    expect(db.bug.findFirst).not.toHaveBeenCalled();
-  });
-
-  it("rejects duplicate verdicts below triager level", async () => {
-    expect(await submitValidation(reviewer("c1", "cara", "contributor"), "bug1", clearTriage)).toMatchObject({
-      status: 403,
-      error: "insufficient_level",
-    });
-    expect(db.bug.findFirst).not.toHaveBeenCalled();
-  });
-
-  it.each(["dispatcher", "merger", "admin_merger"] as const)("rejects a %s from clearing triage", async (level) => {
-    expect(await submitValidation(reviewer("r3", "kim", level), "bug1", clearTriage)).toMatchObject({
-      status: 403,
-      error: "insufficient_level",
-    });
-    expect(db.bug.findFirst).not.toHaveBeenCalled();
+    expect(await submitValidation(t, "bug1", acceptReal)).toMatchObject({ status: 201 });
   });
 
   it("drops confirmation when the triage clearance is undone", async () => {
@@ -754,7 +725,7 @@ describe("confirmation: the triage clearance (triager)", () => {
     state.agents = {
       r1: { id: "r1", ownerUserId: "rob" },
       r2: { id: "r2", ownerUserId: "sam" },
-      t1: { id: "t1", ownerUserId: "tia", level: "triager" },
+      t1: { id: "t1", ownerUserId: "tia", level: "working" },
     };
     expect(await isConfirmed("bug1")).toBe(true);
 
@@ -771,7 +742,7 @@ describe("confirmation: the triage clearance (triager)", () => {
     state.agents = {
       r1: { id: "r1", ownerUserId: "rob" },
       r2: { id: "r2", ownerUserId: "sam" },
-      t1: { id: "t1", ownerUserId: "tia", level: "triager" },
+      t1: { id: "t1", ownerUserId: "tia", level: "working" },
     };
     expect(await isConfirmed("bug1")).toBe(true);
 
@@ -796,7 +767,7 @@ describe("re-review after an edit (#493)", () => {
   it("lets the same reviewers re-accept after an edit, and the issue confirms", async () => {
     const rob = reviewer("r1", "rob");
     const sam = reviewer("r2", "sam");
-    const tia = reviewer("t1", "tia", "triager");
+    const tia = reviewer("t1", "tia", "working");
     // Rob and Sam accepted, then the issue was edited, voiding both.
     state.validations = [
       { id: "v1", bugId: "bug1", agentId: "r1", kind: "real", verdict: "accept", severity: "high", duplicateOfId: null, onBehalfOfUserId: "rob", createdAt: tBefore },
@@ -829,7 +800,7 @@ describe("re-review after an edit (#493)", () => {
   });
 
   it("lets a triager re-clear an issue after an edit", async () => {
-    const tia = reviewer("t1", "tia", "triager");
+    const tia = reviewer("t1", "tia", "working");
     state.validations = [
       { id: "vt", bugId: "bug1", agentId: "t1", kind: "duplicate", verdict: "reject", severity: null, duplicateOfId: null, onBehalfOfUserId: "tia", createdAt: tBefore },
     ];
@@ -843,7 +814,7 @@ describe("re-review after an undone review (#493, CodeRabbit)", () => {
     const tBefore = new Date("2026-10-21T20:00:00Z");
     const rob = reviewer("r1", "rob");
     const sam = reviewer("r2", "sam");
-    const tia = reviewer("t1", "tia", "triager");
+    const tia = reviewer("t1", "tia", "working");
     state.validations = [
       { id: "v-old", bugId: "bug1", agentId: "r1", kind: "real", verdict: "accept", severity: "high", duplicateOfId: null, onBehalfOfUserId: "rob", createdAt: tBefore },
     ];

@@ -4,7 +4,6 @@ const mockSweepOffers = vi.hoisted(() => vi.fn());
 const mockSweepJobReviewOffers = vi.hoisted(() => vi.fn());
 const mockSweepClaims = vi.hoisted(() => vi.fn());
 const mockSweepOrphans = vi.hoisted(() => vi.fn());
-const mockSweepPromotions = vi.hoisted(() => vi.fn());
 const mockDispatch = vi.hoisted(() => vi.fn());
 const mockPruneAgent = vi.hoisted(() => vi.fn());
 const mockSweepAttachments = vi.hoisted(() => vi.fn());
@@ -21,7 +20,6 @@ vi.mock("@/lib/agent-api/offer", () => ({ sweepExpiredOffers: mockSweepOffers })
 vi.mock("@/lib/jobs/review", () => ({ sweepJobReviewOffers: mockSweepJobReviewOffers }));
 vi.mock("@/lib/agent-api/availability", () => ({ sweepStaleClaims: mockSweepClaims }));
 vi.mock("@/lib/orphaned-issues", () => ({ sweepOrphanedIssues: mockSweepOrphans }));
-vi.mock("@/lib/agents/promotion", () => ({ sweepLevelPromotions: mockSweepPromotions }));
 vi.mock("@/lib/webhooks/deliver", () => ({ dispatchDueDeliveries: mockDispatch }));
 vi.mock("@/lib/agent-retention", () => ({ pruneAgentRows: mockPruneAgent }));
 vi.mock("@/lib/attachment-retention", () => ({ sweepOrphanedAttachments: mockSweepAttachments }));
@@ -46,7 +44,6 @@ describe("runPlatformSweeps (#647)", () => {
     mockSweepClaims.mockResolvedValue({ released: 1, offered: 1 });
     mockSweepOrphans.mockResolvedValue({ reopened: 2 });
     mockSweepBids.mockResolvedValue({ invited: 1, assigned: 2, lapsed: 0, errors: [] });
-    mockSweepPromotions.mockResolvedValue({ promoted: 1, demoted: 0 });
     mockDispatch.mockResolvedValue(4);
     mockPruneAgent.mockResolvedValue({
       pairings: 1,
@@ -72,7 +69,7 @@ describe("runPlatformSweeps (#647)", () => {
       expect(result.sweeps.claims).toEqual({ status: "ok", released: 1, offered: 1 });
       expect(result.sweeps.orphanedIssues).toEqual({ status: "ok", reopened: 2 });
       expect(result.sweeps.bids).toEqual({ status: "ok", invited: 1, assigned: 2, lapsed: 0 });
-      expect(result.sweeps.promotions).toEqual({ status: "ok", promoted: 1, demoted: 0 });
+      expect(result.sweeps).not.toHaveProperty("promotions");
       expect(result.sweeps.deliveries).toEqual({ status: "ok", processed: 4 });
       expect(result.sweeps.retention).toEqual({
         status: "ok",
@@ -105,7 +102,6 @@ describe("runPlatformSweeps (#647)", () => {
       expect(result.sweeps.offers).toEqual({ status: "ok", expired: 2 });
       expect(result.sweeps.jobReviewOffers).toEqual({ status: "ok", expired: 1, offered: 3 });
       expect(result.sweeps.claims).toEqual({ status: "ok", released: 1, offered: 1 });
-      expect(result.sweeps.promotions).toEqual({ status: "ok", promoted: 1, demoted: 0 });
       expect(result.sweeps.deliveries).toEqual({
         status: "error",
         error: "Network timeout during webhooks",
@@ -121,7 +117,7 @@ describe("runPlatformSweeps (#647)", () => {
     expect(mockSweepOrphans).toHaveBeenCalledOnce();
     if (!("skipped" in result)) {
       expect(result.sweeps.orphanedIssues).toEqual({ status: "error", error: "recovery failed" });
-      expect(result.sweeps.promotions.status).toBe("ok");
+      expect(result.sweeps.bids.status).toBe("ok");
       expect(result.sweeps.retention.status).toBe("ok");
     }
     expect(getConsecutiveFailures("orphanedIssues")).toBe(1);

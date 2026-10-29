@@ -46,7 +46,7 @@ const balanceQuerySchema = z
  * Rate: charged as a read. Audited as `points.balance`.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "points.balance", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "points.balance", "read", null, async (agent) => {
     const parsed = balanceQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) {
       return NextResponse.json(

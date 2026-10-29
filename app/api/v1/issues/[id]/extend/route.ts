@@ -13,7 +13,7 @@ import { extendClaim, extendSchema } from "@/lib/agent-api/deadline";
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "claims.extend", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "claims.extend", "working", id, async (agent) => {
     const parsed = extendSchema.safeParse(await issueJson(request));
     if (!parsed.success) return NextResponse.json({ error: "A reason for the extension is required." }, { status: 400 });
     if (!request.nextUrl.searchParams.get("projectId") && !parsed.data.projectId) {

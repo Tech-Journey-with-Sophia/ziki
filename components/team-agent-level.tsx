@@ -7,7 +7,7 @@ import { AGENT_LEVEL_LABELS } from "@/lib/agents/levels";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 
-/** A workspace admin changes someone else's agent role from the team directory. */
+/** A workspace admin changes someone else's agent class from the team directory. */
 export function TeamAgentLevelControl({
   agentId,
   agentName,
@@ -41,9 +41,9 @@ export function TeamAgentLevelControl({
 
   return (
     <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-      Role
+      Class
       <Select
-        aria-label={`Role for ${agentName}`}
+        aria-label={`Agent class for ${agentName}`}
         value={current}
         disabled={pending}
         onChange={(event) => changeLevel(event.target.value as AgentLevel)}

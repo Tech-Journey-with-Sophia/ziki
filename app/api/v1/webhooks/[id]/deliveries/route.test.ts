@@ -24,7 +24,7 @@ function request(path: string, method = "GET", keyed = true) {
     headers: keyed ? { authorization: "Bearer ziki_test-key" } : {},
   });
 }
-function key(level = "contributor") {
+function key(level = "working") {
   return {
     id: "key-a",
     revokedAt: null,
@@ -48,7 +48,7 @@ beforeEach(() => {
 describe("GET /api/v1/webhooks/{id}/deliveries (#644)", () => {
   it("needs a key, lets an observer read, and charges a read", async () => {
     expect((await deliveries(request("/webhooks/sub-1/deliveries", "GET", false), sub)).status).toBe(401);
-    db.agentApiKey.findUnique.mockResolvedValueOnce(key("observer"));
+    db.agentApiKey.findUnique.mockResolvedValueOnce(key("working"));
     const response = await deliveries(request("/webhooks/sub-1/deliveries?status=dead&limit=5"), sub);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ items: [], nextCursor: null });
@@ -86,9 +86,7 @@ describe("POST /api/v1/webhooks/{id}/deliveries/{deliveryId}/retry (#644)", () =
     });
   });
 
-  it("needs contributor, and is 404 for another agent's subscription", async () => {
-    db.agentApiKey.findUnique.mockResolvedValueOnce(key("observer"));
-    expect((await retry(request("/webhooks/sub-1/deliveries/d3/retry", "POST"), one)).status).toBe(403);
+  it("is 404 for another agent's subscription", async () => {
     db.webhookSubscription.findFirst.mockResolvedValue(null);
     expect((await retry(request("/webhooks/sub-1/deliveries/d3/retry", "POST"), one)).status).toBe(404);
     expect(db.webhookDelivery.updateMany).not.toHaveBeenCalled();

@@ -4,7 +4,7 @@ import { agentIssueRequest, createAgentIssue, issueProject, listAgentIssues } fr
 
 /** GET ?projectId=&status=&severity=&platform=&area=&assignee=&stage=&cursor=&limit= */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "issues.list", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "issues.list", "read", null, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     return NextResponse.json(await listAgentIssues(scope, request.nextUrl.searchParams));
   });
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
  * Client severity is ignored; status and assignment cannot be set here.
  */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "issues.create", "contributor", null,
+  return agentIssueRequest(request, "issues.create", "working", null,
     (agent) => createAgentIssue(agent, request));
 }
 

@@ -32,7 +32,7 @@ const agent = {
   name: "Bob's Claude",
   ownerId: "owner-bob",
   tenantId: "tenant1",
-  level: "reviewer" as const,
+  level: "working" as const,
   burst: false,
   keyId: "k1",
   projectId: null,

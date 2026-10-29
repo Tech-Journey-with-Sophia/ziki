@@ -5,6 +5,9 @@ import { consumePairingLimit } from "@/lib/agents/rate-limit";
 import { collectPairing } from "@/lib/agents/pairing";
 import { isAgentPlatformEnabled } from "@/lib/feature-flags";
 import { agentPlatformDisabledResponse } from "@/lib/agents/platform-gate";
+import { prisma } from "@/lib/prisma";
+import { absoluteUrl } from "@/lib/site-url";
+import { WATCH_WORK_MESSAGE } from "@/lib/agents/pairing-link";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -27,17 +30,24 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as { device_code?: unknown } | null;
   const result = await collectPairing(body?.device_code);
   switch (result.status) {
-    case "issued":
+    case "issued": {
+      // The key is shown only in this response, so the work URL is a best effort and never fails it.
+      const project = result.projectId
+        ? await prisma.project.findUnique({ where: { id: result.projectId }, select: { slug: true } }).catch(() => null)
+        : null;
       return NextResponse.json(
         {
           api_key: result.key.rawKey,
           key_prefix: result.key.prefix,
           agent: { id: result.key.agentId, name: result.key.name, level: result.key.level },
           project_id: result.projectId,
-          message: "Store this key now. It is your account and it is not shown again. Confirm with GET /api/v1/agents/me.",
+          // #work-feed: the project's work URL is where the agent waits for work.
+          work_url: project ? absoluteUrl(`/${project.slug}/work`) : null,
+          message: `Store this key now. It is your account and it is not shown again. Confirm with GET /api/v1/agents/me. ${WATCH_WORK_MESSAGE}`,
         },
         { status: 200, headers: NO_STORE },
       );
+    }
     case "pending":
       return NextResponse.json(
         { error: "authorization_pending", message: "Waiting for your owner to approve the code." },

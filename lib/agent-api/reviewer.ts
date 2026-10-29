@@ -24,7 +24,7 @@ export async function findReviewableIssues(
   reviewType: "validation" | "test" | "all" = "all",
   limit = 50,
 ): Promise<ReviewableIssue[]> {
-  requireLevel(agent, "reviewer");
+  requireLevel(agent, "working");
 
   const results: ReviewableIssue[] = [];
 
@@ -52,6 +52,7 @@ export async function findReviewableIssues(
         reporterId: true,
         beneficiaryUserId: true,
         createdByAgentId: true,
+        createdByAgent: { select: { ownerUserId: true } },
         createdAt: true,
         claims: {
           where: { status: "active", releasedAt: null },
@@ -68,6 +69,7 @@ export async function findReviewableIssues(
         reporterId: bug.reporterId,
         beneficiaryUserId: bug.beneficiaryUserId,
         createdByAgentId: bug.createdByAgentId,
+        createdByAgent: bug.createdByAgent,
         claims: bug.claims.map((c) => ({
           status: "active" as const,
           releasedAt: null,
@@ -116,6 +118,7 @@ export async function findReviewableIssues(
         reporterId: true,
         beneficiaryUserId: true,
         createdByAgentId: true,
+        createdByAgent: { select: { ownerUserId: true } },
         createdAt: true,
         claims: {
           where: { status: "active", releasedAt: null },
@@ -131,6 +134,7 @@ export async function findReviewableIssues(
         reporterId: bug.reporterId,
         beneficiaryUserId: bug.beneficiaryUserId,
         createdByAgentId: bug.createdByAgentId,
+        createdByAgent: bug.createdByAgent,
         claims: bug.claims.map((c) => ({
           status: "active" as const,
           releasedAt: null,

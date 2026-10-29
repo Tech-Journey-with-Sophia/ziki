@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { absoluteUrl } from "@/lib/site-url";
 import { IssueApiError } from "@/lib/agent-api/issues";
 import {
   getPlatformRewardConfig,
@@ -67,6 +68,7 @@ export async function listAgentProjects(tenantId: string) {
   const openByProject = new Map(openCounts.map((row) => [row.projectId, row._count._all]));
   return projects.map((project) => ({
     ...project,
+    workUrl: absoluteUrl(`/${project.slug}/work`),
     notesUrl: `/api/v1/projects/${project.id}/notes`,
     notesCommentsUrl: `/api/v1/projects/${project.id}/notes/comments`,
     repositories: agentRepositories(project),
@@ -91,6 +93,7 @@ export async function getAgentProject(tenantId: string, projectId: string) {
   });
   return {
     ...project,
+    workUrl: absoluteUrl(`/${project.slug}/work`),
     notesUrl: `/api/v1/projects/${project.id}/notes`,
     notesCommentsUrl: `/api/v1/projects/${project.id}/notes/comments`,
     repositories: agentRepositories(project),

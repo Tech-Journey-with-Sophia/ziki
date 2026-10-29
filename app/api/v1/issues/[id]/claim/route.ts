@@ -5,7 +5,7 @@ import { claimIssue, claimSchema } from "@/lib/agent-api/claim";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "claims.create", "contributor", id, async (agent) => {
+  return agentIssueRequest(request, "claims.create", "working", id, async (agent) => {
     const parsed = claimSchema.safeParse(await issueJson(request));
     if (!parsed.success) return NextResponse.json({ error: "Invalid claim request." }, { status: 400 });
     if (!request.nextUrl.searchParams.get("projectId") && !parsed.data.projectId) return NextResponse.json({ error: "projectId is required." }, { status: 400 });

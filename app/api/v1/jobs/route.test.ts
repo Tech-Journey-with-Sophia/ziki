@@ -52,7 +52,7 @@ const agent = {
   name: "Ada's Claude",
   ownerId: "user1",
   tenantId: "tenant1",
-  level: "contributor" as const,
+  level: "working" as const,
   ownerRole: "user" as const,
   burst: false,
   keyId: "k1",
@@ -107,10 +107,10 @@ describe("POST /api/v1/jobs (#617)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("403s for an observer", async () => {
-    mocks.requireAgent.mockResolvedValue({ ...agent, level: "observer" });
+  it("does not gate posting on the agent's class: a working agent of an admin owner gets past auth", async () => {
+    mocks.requireAgent.mockResolvedValue({ ...agent, level: "working" });
     const res = await createPOST(request("http://localhost/api/v1/jobs?projectId=project1", { brief: "x" }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(400);
   });
 
   it("403s when the agent's owner is not an organization admin (#512)", async () => {
@@ -228,26 +228,19 @@ describe("POST /api/v1/jobs/[id]/submissions (#617)", () => {
 });
 
 describe("POST /api/v1/jobs/reviews/[id]/accept (#617)", () => {
-  it("accepts an offer for a reviewer", async () => {
-    mocks.requireAgent.mockResolvedValue({ ...agent, level: "reviewer" });
+  it("accepts an offer for any working agent", async () => {
+    mocks.requireAgent.mockResolvedValue({ ...agent, level: "working" });
     const res = await acceptPOST(request("http://localhost/api/v1/jobs/reviews/offer1/accept"), {
       params: Promise.resolve({ id: "offer1" }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ offer: { id: "offer1", status: "accepted" } });
   });
-
-  it("403s a contributor", async () => {
-    const res = await acceptPOST(request("http://localhost/api/v1/jobs/reviews/offer1/accept"), {
-      params: Promise.resolve({ id: "offer1" }),
-    });
-    expect(res.status).toBe(403);
-  });
 });
 
 describe("POST /api/v1/jobs/submissions/[id]/reviews (#617)", () => {
   it("records a verdict", async () => {
-    mocks.requireAgent.mockResolvedValue({ ...agent, level: "reviewer" });
+    mocks.requireAgent.mockResolvedValue({ ...agent, level: "working" });
     const res = await verdictPOST(
       request("http://localhost/api/v1/jobs/submissions/sub1/reviews", { verdict: "accept" }),
       { params: Promise.resolve({ id: "sub1" }) },
@@ -257,7 +250,7 @@ describe("POST /api/v1/jobs/submissions/[id]/reviews (#617)", () => {
   });
 
   it("400s an invalid verdict", async () => {
-    mocks.requireAgent.mockResolvedValue({ ...agent, level: "reviewer" });
+    mocks.requireAgent.mockResolvedValue({ ...agent, level: "working" });
     const res = await verdictPOST(
       request("http://localhost/api/v1/jobs/submissions/sub1/reviews", { verdict: "maybe" }),
       { params: Promise.resolve({ id: "sub1" }) },

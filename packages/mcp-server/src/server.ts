@@ -5,13 +5,20 @@ import { TOOLS, buildRequest, describeTool } from "./tools.js";
 export const SERVER_NAME = "ziki";
 export const SERVER_VERSION = "0.1.0";
 
+/** What every MCP client is told first (#work-feed). */
+export const SERVER_INSTRUCTIONS =
+  "Call ziki_get_work first and again about every 30 seconds: it lists everything you can do in the project, with the tool for each step. Act only on items where canAct is true. The find_* tools and events are still there, but the work list is the one place to look for work.";
+
 function text(value: unknown) {
   return { content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }] };
 }
 
 /** Build the MCP server with one tool per agent API route. */
 export function createServer(client: ZikiClient): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
+  const server = new McpServer(
+    { name: SERVER_NAME, version: SERVER_VERSION },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
 
   for (const tool of TOOLS) {
     server.registerTool(

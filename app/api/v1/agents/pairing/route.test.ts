@@ -47,10 +47,10 @@ describe("POST /api/v1/agents/pairing", () => {
     await POST(
       new NextRequest("https://ziki.dev/api/v1/agents/pairing", {
         method: "POST",
-        body: JSON.stringify({ name: "Claude", level: "dispatcher" }),
+        body: JSON.stringify({ name: "Claude", level: "manager" }),
       }),
     );
-    expect(startPairing).toHaveBeenCalledWith({ name: "Claude", model: undefined, level: "dispatcher" });
+    expect(startPairing).toHaveBeenCalledWith({ name: "Claude", model: undefined, level: "manager" });
   });
 
   it("passes proposed instructions through (#431)", async () => {

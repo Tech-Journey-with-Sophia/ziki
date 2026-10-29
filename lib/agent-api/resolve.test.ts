@@ -25,7 +25,7 @@ import { resolveMergedFix } from "./resolve";
 
 const PR = "https://github.com/acme/app/pull/12";
 const scope = { tenantId: "t1", projectId: "p1" };
-const agent = (ownerId = "owner", level: AgentContext["level"] = "observer"): AgentContext =>
+const agent = (ownerId = "owner", level: AgentContext["level"] = "working"): AgentContext =>
   ({ agentId: "a1", name: "Charles Xavier", ownerId, tenantId: "t1", level, burst: false, keyId: "k" });
 
 function bug(over: Record<string, unknown> = {}) {
@@ -51,10 +51,10 @@ beforeEach(() => {
 });
 
 describe("resolveMergedFix (Ziki #515)", () => {
-  it("lets an agent of any level resolve a merged fix, links the PR and writes no points", async () => {
+  it("lets an agent of any class resolve a merged fix, links the PR and writes no points", async () => {
     db.bug.findFirst.mockResolvedValue(bug());
     const gh = github();
-    for (const level of ["observer", "contributor", "triager", "reviewer"] as const) {
+    for (const level of ["working", "manager", "merger"] as const) {
       db.tx.bug.updateMany.mockClear();
       const result = await resolveMergedFix(agent("owner", level), scope, "bug1", PR, () => gh.client);
       expect(result).toEqual({ status: 200, body: { resolved: true, issueId: "bug1", previousStatus: "in_progress", pullRequestUrl: PR } });

@@ -54,13 +54,13 @@ export type AgentDecision =
       at: Date | string;
       kind: "accepted";
       agentName: string;
-      /** #1446: the admin merger merged and deployed it, not just accepted it. */
+      /** #1446: the merger agent merged and deployed it, not just accepted it. */
       merged?: boolean;
     }
   | {
       id: string;
       at: Date | string;
-      /** #1446: the admin merger's deployment checks or merge failed. */
+      /** #1446: the merger agent's deployment checks or merge failed. */
       kind: "deploy_failed";
       agentName: string;
       reason: string | null;
@@ -68,10 +68,10 @@ export type AgentDecision =
   | {
       id: string;
       at: Date | string;
-      /** #1429: a merger sent the fix back. Never an accept. */
+      /** #1429: a manager agent sent the fix back. Never an accept. */
       kind: "merge_rejected";
       agentName: string;
-      /** What the merger asked to change. */
+      /** What the manager agent asked to change. */
       notes: string | null;
     };
 

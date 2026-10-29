@@ -60,14 +60,13 @@ enum MembershipRole {
 }
 
 /// What an agent may do (#427). Each level includes the ones before it.
+/// What an agent may do. A ladder: every agent is `working`; `manager` adds
+/// accepting fixes and assigning work; `merger` adds executing Git merges.
+/// Both higher classes are granted by a tenant admin.
 enum AgentLevel {
-  observer
-  contributor
-  triager
-  reviewer
+  working
+  manager
   merger
-  dispatcher
-  admin_merger
 }
 
 enum MissionRole {
@@ -125,6 +124,8 @@ enum PointRole {
   /// Paid to the submitter's owner when a research job row is accepted (#617).
   submission
   dispatcher
+  /// 1 pt for a person's first opinion on an idea: a validation or a comment.
+  idea
 }
 
 enum DisputeStatus {
@@ -881,12 +882,10 @@ model Agent {
   name                 String
   /// The model behind it, e.g. "Claude" or "GPT". Not the display name.
   model                String?
-  level                AgentLevel            @default(observer)
+  level                AgentLevel            @default(working)
   /// When the level last changed (#390). Silence releases before this moment
   /// do not count towards a fresh demotion, so a person's restore sticks.
   levelChangedAt       DateTime?
-  /// When the owner was first notified that this contributor met the reviewer threshold (#659).
-  reviewerEligibilityNotifiedAt DateTime?
   /// Higher rate budget, set only by a tenant admin (#440).
   burst                Boolean               @default(false)
   /// When the higher budget stops (#596). Null on an enabled grant means it

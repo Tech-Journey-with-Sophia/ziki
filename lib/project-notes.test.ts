@@ -13,7 +13,7 @@ import { agentNotesActor, humanNotesActor, saveProjectNotes, readProjectNotes, l
   addNoteComment, voteNoteComment, listNoteRevisions, restoreProjectNotes, notesPage, type NotesActor } from "./project-notes";
 import type { AgentContext } from "@/lib/agents/require-agent";
 
-const agent: AgentContext = { agentId: "agent", ownerId: "owner", tenantId: "tenant", name: "Worker", level: "contributor", projectId: "project", keyId: "key", burst: false };
+const agent: AgentContext = { agentId: "agent", ownerId: "owner", tenantId: "tenant", name: "Worker", level: "working", projectId: "project", keyId: "key", burst: false };
 const actor: NotesActor = { projectId: "project", tenantId: "tenant", userId: "owner", name: "Worker", agent, canEdit: true };
 const input = { body: "Use migrations only.", expectedVersion: 0, reason: "Initial guidance" };
 const at = new Date("2026-10-28T06:00:00.000Z");
@@ -47,8 +47,8 @@ describe("project notes access", () => {
     expect((await agentNotesActor(agent, "project")).canEdit).toBe(true);
   });
   it("recognizes an existing admin merger grant without a new role", async () => {
-    expect((await agentNotesActor({ ...agent, level: "admin_merger" }, "project")).canEdit).toBe(true);
-    expect((await agentNotesActor({ ...agent, level: "merger" }, "project")).canEdit).toBe(false);
+    expect((await agentNotesActor({ ...agent, level: "merger" }, "project")).canEdit).toBe(true);
+    expect((await agentNotesActor({ ...agent, level: "manager" }, "project")).canEdit).toBe(false);
   });
   it("applies the same organization gate to humans", async () => {
     const human = { id: "owner", name: "Person", role: "admin" as const };

@@ -30,7 +30,7 @@ describe("GET /api/v1/agents/me (#742)", () => {
       name: "Ada's Claude",
       ownerId: "ada",
       tenantId: "tenant_zedu",
-      level: "observer",
+      level: "working",
       projectId: "project_web",
       projectSlug: "web",
     });
@@ -44,9 +44,12 @@ describe("GET /api/v1/agents/me (#742)", () => {
       name: "Ada's Claude",
       owner_id: "ada",
       tenant_id: "tenant_zedu",
-      level: "observer",
+      level: "working",
       project_id: "project_web",
       project_slug: "web",
+      // #work-feed: the one URL the agent is told to watch.
+      work_url: expect.stringMatching(/\/web\/work$/),
+      next_step: expect.stringContaining("work_url"),
       projects: [
         { id: "project_web", slug: "web", name: "Web" },
         { id: "project_api", slug: "api", name: "API" },
@@ -58,7 +61,7 @@ describe("GET /api/v1/agents/me (#742)", () => {
   it("lists the tenant's projects so an unscoped key can discover its projectId (#607)", async () => {
     requireAgent.mockResolvedValue({
       agentId: "agent1", name: "Ada's Claude", ownerId: "ada", tenantId: "tenant_zedu",
-      level: "observer", projectId: null, projectSlug: null,
+      level: "working", projectId: null, projectSlug: null,
     });
     const response = await GET(new NextRequest("http://localhost:3000/api/v1/agents/me"));
     expect(response.status).toBe(200);
@@ -73,7 +76,7 @@ describe("GET /api/v1/agents/me (#742)", () => {
   it("returns the owner's standing instructions (#605)", async () => {
     requireAgent.mockResolvedValue({
       agentId: "agent1", name: "Ada's Claude", ownerId: "ada", tenantId: "tenant_zedu",
-      level: "observer", projectId: null, projectSlug: null,
+      level: "working", projectId: null, projectSlug: null,
     });
     prisma.agent.findUnique.mockResolvedValue({ instructions: "Focus on desktop bugs today." });
     const response = await GET(new NextRequest("http://localhost:3000/api/v1/agents/me"));

@@ -110,11 +110,11 @@ export async function submitTestVerdict(
   bugId: string,
   rawBody: unknown,
 ): Promise<SubmitTestVerdictResult> {
-  if (!hasLevel(agent.level, "reviewer")) {
+  if (!hasLevel(agent.level, "working")) {
     return {
       status: 403,
       error: "insufficient_level",
-      message: "Only reviewer or merger agents can report a test verdict.",
+      message: "This agent can't report a test verdict.",
     };
   }
 

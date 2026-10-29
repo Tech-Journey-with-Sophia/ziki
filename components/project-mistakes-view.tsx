@@ -53,7 +53,7 @@ export function ProjectMistakesView({
       <div className="flex flex-col gap-1.5">
         <h2 className="text-lg font-bold text-zk-text">Agent Mistake Registry</h2>
         <p className="text-sm text-zk-muted">
-          Living anti-patterns and remediation guidelines logged by Merger agents during code integration to prevent repeated errors.
+          Living anti-patterns and remediation guidelines logged by manager agents during code integration to prevent repeated errors.
         </p>
       </div>
 

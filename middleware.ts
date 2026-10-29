@@ -14,6 +14,9 @@ const { auth } = NextAuth(authConfig);
 /** Issue detail paths only — enough for unfurl bots to hit generateMetadata. */
 const ISSUE_DETAIL_PATH = /^\/(?:issues|bugs)\/[^/]+\/?$/;
 
+/** A project's agent work feed: `/<project-slug>/work`. */
+const PROJECT_WORK_PATH = /^\/[^/]+\/work\/?$/;
+
 export function isPublicPath(
   pathWithoutBase: string,
   userAgent?: string | null,
@@ -84,7 +87,13 @@ export default auth((req) => {
     pathWithoutBase.startsWith("/login") || pathWithoutBase.startsWith("/signup");
   const isPublic = isPublicPath(pathWithoutBase, req.headers.get("user-agent"));
 
-  if (!isLoggedIn && !isPublic) {
+  // An agent watching `/<project>/work` (#work-feed) authenticates with its
+  // key, not a session; the route rejects a missing or wrong one.
+  const isAgentWorkFeed =
+    PROJECT_WORK_PATH.test(pathWithoutBase) &&
+    (req.headers.get("authorization") ?? "").startsWith("Bearer ");
+
+  if (!isLoggedIn && !isPublic && !isAgentWorkFeed) {
     const url = new URL(
       BASE_PATH ? `${BASE_PATH}/login` : "/login",
       req.nextUrl.origin,

@@ -14,6 +14,7 @@ import {
   retryAfterMs,
   saveConfig,
   watch,
+  work,
 } from "./ziki-agent.mjs";
 
 const BASE = "https://ziki.test";
@@ -48,7 +49,9 @@ function fakeApi(routes: Record<string, Reply[]>) {
     if (!queue?.length)
       throw new Error(`unexpected request: ${method} ${url.pathname}`);
     const reply = queue.length > 1 ? queue.shift()! : queue[0];
-    return new Response(JSON.stringify(reply.body ?? {}), {
+    // A 304 has no body.
+    const body = reply.status === 304 ? null : JSON.stringify(reply.body ?? {});
+    return new Response(body, {
       status: reply.status ?? 200,
       headers: reply.headers,
     });
@@ -563,12 +566,156 @@ describe("watch", () => {
   });
 });
 
+describe("work", () => {
+  const me = (workUrl: string | null, projects = [{ id: "project_1", slug: "ziki" }]) => ({
+    body: { id: "agent_1", name: "Ada's Claude", work_url: workUrl, projects },
+  });
+  const item = (key: string, canAct = true) => ({
+    kind: "idea",
+    key,
+    title: `Give your opinion on ${key}`,
+    minimumRole: canAct ? "working" : "manager",
+    canAct,
+    ...(canAct ? {} : { blockedReason: "Needs a manager agent." }),
+    actions: [],
+  });
+  const feed = (items: unknown[], ask: string[] = []) => ({
+    project: { id: "project_1", slug: "ziki", name: "Ziki" },
+    pollAfterSeconds: 30,
+    ask,
+    items,
+  });
+
+  it("prints the work feed from the work_url in /agents/me", async () => {
+    await savedConfig();
+    const { fetchFn, calls } = fakeApi({
+      "GET /api/v1/agents/me": [me(`${BASE}/ziki/work`)],
+      "GET /ziki/work": [{ body: feed([item("idea:1")]) }],
+    });
+    const { ctx, out } = testContext(fetchFn);
+
+    await work(ctx, { configFile });
+
+    expect(JSON.parse(out.join("\n")).items[0].key).toBe("idea:1");
+    expect(calls.map((c) => c.path)).toEqual(["/api/v1/agents/me", "/ziki/work"]);
+    expect(calls[1].headers.Authorization).toBe("Bearer zk_live_key");
+  });
+
+  it("falls back to the project id when the key has no work_url", async () => {
+    await savedConfig();
+    const { fetchFn, calls } = fakeApi({
+      "GET /api/v1/agents/me": [me(null)],
+      "GET /project_1/work": [{ body: feed([]) }],
+    });
+    const { ctx } = testContext(fetchFn);
+
+    await work(ctx, { configFile });
+
+    expect(calls.at(-1)?.path).toBe("/project_1/work");
+  });
+
+  it("uses --project without asking /agents/me", async () => {
+    await savedConfig();
+    const { fetchFn, calls } = fakeApi({
+      "GET /issues-project/work": [{ body: feed([]) }],
+    });
+    const { ctx } = testContext(fetchFn);
+
+    await work(ctx, { configFile, project: "issues-project" });
+
+    expect(calls.map((c) => c.path)).toEqual(["/issues-project/work"]);
+  });
+
+  it("--watch polls every pollAfterSeconds with If-None-Match and prints each new item once", async () => {
+    await savedConfig();
+    const { fetchFn, calls } = fakeApi({
+      "GET /api/v1/agents/me": [me(`${BASE}/ziki/work`)],
+      "GET /ziki/work": [
+        {
+          body: feed([item("idea:1"), item("accept_fix:2", false)], ["1 idea needs your opinion."]),
+          headers: { ETag: '"v1"' },
+        },
+        { status: 304, headers: { ETag: '"v1"' } },
+        {
+          body: feed([item("idea:1"), item("offer:3")], ["1 idea needs your opinion."]),
+          headers: { ETag: '"v2"' },
+        },
+      ],
+    });
+    const { ctx, out, sleeps, logs } = testContext(fetchFn);
+
+    await work(ctx, { configFile, watch: true, maxPolls: 3 });
+
+    // Blocked items are not printed; idea:1 is printed once.
+    expect(out.map((line) => JSON.parse(line).key)).toEqual(["idea:1", "offer:3"]);
+    const polls = calls.filter((c) => c.path === "/ziki/work");
+    expect(polls.map((c) => c.headers["If-None-Match"])).toEqual([undefined, '"v1"', '"v1"']);
+    expect(sleeps).toEqual([30_000, 30_000]);
+    // The same ask is logged once.
+    expect(logs.filter((line) => line.includes("needs your opinion"))).toHaveLength(1);
+  });
+
+  it("--watch prints an item again when it comes back", async () => {
+    await savedConfig();
+    const { fetchFn } = fakeApi({
+      "GET /api/v1/agents/me": [me(`${BASE}/ziki/work`)],
+      "GET /ziki/work": [
+        { body: feed([item("idea:1")]) },
+        { body: feed([]) },
+        { body: feed([item("idea:1")]) },
+      ],
+    });
+    const { ctx, out } = testContext(fetchFn);
+
+    await work(ctx, { configFile, watch: true, maxPolls: 3 });
+
+    expect(out.map((line) => JSON.parse(line).key)).toEqual(["idea:1", "idea:1"]);
+  });
+
+  it("--watch pauses when the read budget is spent", async () => {
+    await savedConfig();
+    const { fetchFn } = fakeApi({
+      "GET /api/v1/agents/me": [me(`${BASE}/ziki/work`)],
+      "GET /ziki/work": [
+        {
+          body: feed([]),
+          headers: { "X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "120" },
+        },
+      ],
+    });
+    const { ctx, sleeps, logs } = testContext(fetchFn);
+
+    await work(ctx, { configFile, watch: true, maxPolls: 1 });
+
+    expect(sleeps).toEqual([120_000]);
+    expect(logs.join("\n")).toMatch(/Read budget used up/);
+  });
+
+  it("tells you to pair first when there is no key", async () => {
+    const { ctx } = testContext(fakeApi({}).fetchFn);
+    await expect(work(ctx, { configFile })).rejects.toThrow(/pair/);
+  });
+
+  it("runs from the command line", async () => {
+    await savedConfig();
+    const { fetchFn } = fakeApi({
+      "GET /api/v1/agents/me": [me(`${BASE}/ziki/work`)],
+      "GET /ziki/work": [{ body: feed([item("idea:1")]) }],
+    });
+    const { ctx, out } = testContext(fetchFn);
+
+    expect(await main(["work", "--watch", "--once", "--config", configFile], ctx)).toBe(0);
+    expect(out.map((line) => JSON.parse(line).key)).toEqual(["idea:1"]);
+  });
+});
+
 describe("command line", () => {
   it("prints help and succeeds for help, fails with no command", async () => {
     const { ctx, out } = testContext(async () => new Response("{}"));
     expect(await main(["help"], ctx)).toBe(0);
     expect(await main([], ctx)).toBe(1);
     expect(out.join("\n")).toContain("ziki-agent");
+    expect(out.join("\n")).toContain("work --watch");
   });
 
   it("reports an unknown command", async () => {

@@ -17,7 +17,7 @@ import { PUT as vote, DELETE as unvote } from "./comments/[commentId]/upvote/rou
 import { GET as revisions } from "./revisions/route";
 import { POST as restore } from "./revisions/[revisionId]/restore/route";
 
-function key(level = "contributor", projectId = "project") {
+function key(level = "working", projectId = "project") {
   return { id: "key", lastUsedAt: new Date(), revokedAt: null, projectId, project: { slug: "ziki" },
     agent: { id: "agent", name: "Worker", ownerUserId: "owner", tenantId: "tenant", level, burst: false, revokedAt: null,
       owner: { role: "user", memberships: [{ tenantId: "tenant" }] } } };
@@ -54,11 +54,11 @@ describe("project notes API security and HTTP contract", () => {
     expect(db.project.findFirst).not.toHaveBeenCalled();
   });
   it.each(handlers)("rejects a foreign project key on every endpoint", async (handler) => {
-    db.agentApiKey.findUnique.mockResolvedValue(key("contributor", "foreign"));
+    db.agentApiKey.findUnique.mockResolvedValue(key("working", "foreign"));
     expect((await handler(request(), context)).status).toBe(403);
   });
-  it("lets observers read notes, comments and revisions with private responses", async () => {
-    db.agentApiKey.findUnique.mockResolvedValue(key("observer"));
+  it("lets working agents read notes, comments and revisions with private responses", async () => {
+    db.agentApiKey.findUnique.mockResolvedValue(key("working"));
     const response = await GET(request(), context);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ notes: null, version: 0, canEdit: false });
@@ -71,9 +71,9 @@ describe("project notes API security and HTTP contract", () => {
     expect((await restore(request("POST", { expectedVersion: 1, reason: "Restore" }), context)).status).toBe(403);
     expect(db.$transaction).not.toHaveBeenCalled();
   });
-  it.each([comment, vote, unvote])("observers cannot contribute discussion", async (handler) => {
-    db.agentApiKey.findUnique.mockResolvedValue(key("observer"));
-    expect((await handler(request("POST", { body: "Text" }), context)).status).toBe(403);
+  it.each([comment, vote, unvote])("lets any working agent contribute discussion", async (handler) => {
+    db.agentApiKey.findUnique.mockResolvedValue(key("working"));
+    expect([200, 201]).toContain((await handler(request("POST", { body: "Text" }), context)).status);
   });
   it("allows an owner agent to create official notes and charges a write", async () => {
     db.membership.findUnique.mockResolvedValue({ role: "owner" });
@@ -83,7 +83,7 @@ describe("project notes API security and HTTP contract", () => {
     expect(db.projectNoteRevision.create).toHaveBeenCalled();
   });
   it("allows an existing admin merger to edit", async () => {
-    db.agentApiKey.findUnique.mockResolvedValue(key("admin_merger"));
+    db.agentApiKey.findUnique.mockResolvedValue(key("merger"));
     expect((await PUT(request("PUT", input), context)).status).toBe(200);
   });
   it("returns 400 for malformed JSON and invalid input", async () => {

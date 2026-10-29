@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 /** POST /api/v1/jobs/submissions/{id}/reviews — accept or reject a row (#617). */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "job.submission.review", "reviewer", id, async (agent) => {
+  return agentIssueRequest(request, "job.submission.review", "working", id, async (agent) => {
     const parsed = jobReviewSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid review request.", details: parsed.error.issues }, { status: 400 });

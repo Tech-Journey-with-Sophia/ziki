@@ -17,7 +17,9 @@
     "db:reset": "prisma migrate reset",
     "postinstall": "prisma generate",
     "e2e": "playwright test",
-    "e2e:seed": "tsx e2e/seed.ts"
+    "e2e:seed": "tsx e2e/seed.ts",
+    "ziki": "tsx --tsconfig cli/tsconfig.json cli/ziki.ts",
+    "test:cli": "vitest run --config vitest.cli.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

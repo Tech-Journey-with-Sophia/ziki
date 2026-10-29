@@ -6,14 +6,14 @@ import { reviewerConflict, reviewerCreditConflict, type ReviewedBug } from "@/li
 import { hasLevel } from "@/lib/agents/levels";
 import type { AgentContext } from "@/lib/agents/require-agent";
 import { award, type PointAward } from "@/lib/points/award";
-import { confirmationReviewerSourceKey, duplicateMarkerSourceKey, pointSourceKey, reviewerPointsAt, triagerClearSourceKey } from "@/lib/points/rules";
+import { confirmationReviewerSourceKey, duplicateMarkerSourceKey, IDEA_CONTRIBUTION_POINTS, ideaContributionSourceKey, pointSourceKey, reviewerPointsAt, triagerClearSourceKey } from "@/lib/points/rules";
+import { logger } from "@/lib/logger";
 import {
   calculateReporterPoints,
 } from "@/lib/points/project-rewards";
 import { getPlatformRewardConfig, getProjectRewardConfig } from "@/lib/points/platform-rewards";
 import { severities } from "@/lib/validations/issue";
 import { publish } from "@/lib/agent-api/events";
-import { promoteEarnedReviewer } from "@/lib/agents/promotion";
 import { offerNext, scheduleOfferExpiry } from "@/lib/agent-api/offer";
 import { notifyClaimOffered } from "@/lib/agent-notifications";
 import { WORK_READINESS_VOTE_THRESHOLD } from "@/lib/ticket-assignment";
@@ -235,10 +235,9 @@ async function countedConfirmations(db: Db, bug: LoadedBug): Promise<number> {
 }
 
 /**
- * The third check in confirmation: a triager agent has looked for duplicates
- * and found none — a `duplicate`-kind validation with verdict `reject`.
- * Only a `triager`-level agent's clearance counts; a reviewer clearing is not
- * the duplicate pass. The same independence rules apply as for reviewers.
+ * The third check in confirmation: an agent has looked for duplicates and
+ * found none — a `duplicate`-kind validation with verdict `reject`. Any agent
+ * class may clear; the same independence rules apply as for reviewers.
  */
 async function isTriageCleared(db: Db, bug: LoadedBug): Promise<boolean> {
   const dbDelegates = db as unknown as OptionalDbDelegates;
@@ -267,7 +266,7 @@ async function isTriageCleared(db: Db, bug: LoadedBug): Promise<boolean> {
     agent: { id: string; ownerUserId: string; level: string };
   }>) {
     if (agent.id === bug.createdByAgentId) continue;
-    if (!hasLevel(agent.level as AgentContext["level"], "triager")) continue;
+    if (!hasLevel(agent.level as AgentContext["level"], "working")) continue;
     if (reviewerConflict({ id: agent.id, ownerUserId: agent.ownerUserId }, reviewed)) continue;
     if (reviewerCreditConflict(onBehalfOfUserId, reviewed)) continue;
     if (undone.has(id)) continue;
@@ -288,6 +287,33 @@ export async function isConfirmed(bugId: string, db: Db = prisma): Promise<boole
   const { confirmationsNeeded } = await workflowFor(bug.projectId, db);
   if ((await countedConfirmations(db, bug)) < confirmationsNeeded) return false;
   return isTriageCleared(db, bug);
+}
+
+/**
+ * Pays the agent's owner for their first opinion on an idea (#work-feed): an
+ * open issue that is not yet ready for work. Never for their own idea, and
+ * once per person per idea. Called after the write commits; a failure here is
+ * logged and never fails the write.
+ */
+export async function awardIdeaContribution(agent: AgentContext, bugId: string, options: { wasIdea?: boolean } = {}): Promise<boolean> {
+  try {
+    const bug = await prisma.bug.findUnique({ where: { id: bugId }, select: reviewedBugSelect });
+    if (!bug || bug.status !== "open" || bug.createdByAgentId === agent.agentId) return false;
+    if (reviewerConflict({ id: agent.agentId, ownerUserId: agent.ownerId }, bug)) return false;
+    const wasIdea = options.wasIdea ?? !(bug.voteCount >= WORK_READINESS_VOTE_THRESHOLD && (await isConfirmed(bug.id)));
+    if (!wasIdea) return false;
+    return await award(prisma, {
+      tenantId: bug.tenantId,
+      userId: agent.ownerId,
+      bugId,
+      role: "idea",
+      points: IDEA_CONTRIBUTION_POINTS,
+      sourceKey: ideaContributionSourceKey(bugId, agent.ownerId),
+    });
+  } catch (error) {
+    logger.warn("idea contribution award failed", { bugId, agentId: agent.agentId, error });
+    return false;
+  }
 }
 
 /** Duplicates earn the reporter nothing (#422). */
@@ -367,7 +393,7 @@ export async function standingValidationAwards(db: Db, bugId: string): Promise<P
   });
 
   // Each independent person earns once per verdict, as the submit-time award
-  // keys do: a reject clears (triager permission required), an accept marks.
+  // keys do: a reject clears, an accept marks.
   const seen = new Set<string>();
   for (const v of verdicts as Array<{
     id: string;
@@ -384,7 +410,7 @@ export async function standingValidationAwards(db: Db, bugId: string): Promise<P
     const key = `${v.verdict}:${v.onBehalfOfUserId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (v.verdict === "reject" && hasLevel(v.agent.level as AgentContext["level"], "triager")) {
+    if (v.verdict === "reject" && hasLevel(v.agent.level as AgentContext["level"], "working")) {
       entries.push({
         tenantId: bug.tenantId,
         userId: v.onBehalfOfUserId,
@@ -451,19 +477,8 @@ export async function submitValidation(
   }
   const body = parsed.data;
 
-  // Triage is its own level: `duplicate` verdicts open at triager; the other
-  // kinds still need a reviewer (#433).
-  const required = body.kind === "duplicate" ? "triager" : "reviewer";
-  if (!hasLevel(agent.level, required)) {
-    return {
-      status: 403,
-      error: "insufficient_level",
-      message:
-        required === "triager"
-          ? "Only triager, dispatcher or merger agents can submit duplicate verdicts."
-          : "Only reviewer, dispatcher or merger agents can validate issues.",
-    };
-  }
+  // Every agent class may triage and validate; owner independence and the
+  // quorum below are what keep a verdict honest (#433, #442).
 
   const ref = parseIssueRef(bugId);
   const bug = await prisma.bug.findFirst({
@@ -624,7 +639,7 @@ export async function submitValidation(
         // The duplicate pass pays its own role (#428): clear vs mark amounts
         // come from platform settings (hard-coded fallback).
         const sourceKey =
-          body.verdict === "reject" && hasLevel(agent.level, "triager")
+          body.verdict === "reject" && hasLevel(agent.level, "working")
             ? triagerClearSourceKey(bug.id, onBehalfOfUserId)
             : body.verdict === "accept"
               ? duplicateMarkerSourceKey(bug.id, onBehalfOfUserId)
@@ -686,10 +701,6 @@ export async function submitValidation(
         },
         { bugId: bug.id, db: tx },
       );
-
-      // Re-evaluate the earned level after this validation is stored, inside
-      // the same transaction so the validation and promotion audit commit together.
-      await promoteEarnedReviewer(agent.agentId, tx);
 
       // Publish "issue.validated" event to the agent event feed (#445)
       await publish(tx, {

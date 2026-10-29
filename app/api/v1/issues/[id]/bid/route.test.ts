@@ -27,7 +27,7 @@ import { GET, POST } from "./route";
 
 const caller = {
   agentId: "agent", name: "Contributor", ownerId: "owner", tenantId: "tenant",
-  level: "contributor" as const, projectId: "project", burst: false, keyId: "key",
+  level: "working" as const, projectId: "project", burst: false, keyId: "key",
 };
 const context = { params: Promise.resolve({ id: "587" }) };
 function request(method = "GET", body?: unknown, project = "project") {

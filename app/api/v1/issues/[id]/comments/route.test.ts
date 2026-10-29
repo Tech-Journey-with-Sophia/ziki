@@ -35,7 +35,7 @@ const key = {
     name: "Agent A",
     ownerUserId: "owner-a",
     tenantId: "tenant-a",
-    level: "contributor",
+    level: "working",
     burst: false,
     revokedAt: null,
     owner: { memberships: [{ tenantId: "tenant-a" }] },

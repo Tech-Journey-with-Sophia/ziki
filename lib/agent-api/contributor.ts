@@ -23,7 +23,7 @@ export async function findClaimableIssues(
   projectId: string,
   limit = 50,
 ): Promise<ClaimableIssue[]> {
-  requireLevel(agent, "contributor");
+  requireLevel(agent, "working");
   const workflow = await workflowFor(projectId);
   const offerCutoff = new Date(Date.now() - workflow.offerWindowSeconds * 1000);
 

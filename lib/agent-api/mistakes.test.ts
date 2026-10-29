@@ -13,9 +13,9 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 import { recordMistake, listProjectMistakes } from "./mistakes";
 
 const tenantId = "tenant-test";
-const mergerAgent = { agentId: "m1", name: "Merger Agent", ownerId: "user-merger", tenantId, level: "merger" as const, burst: false, keyId: "k-m" };
-const contributorAgent = { agentId: "c1", name: "Contributor Agent", ownerId: "user-contrib", tenantId, level: "contributor" as const, burst: false, keyId: "k-c" };
-const observerAgent = { agentId: "o1", name: "Observer Agent", ownerId: "user-obs", tenantId, level: "observer" as const, burst: false, keyId: "k-o" };
+const mergerAgent = { agentId: "m1", name: "Merger Agent", ownerId: "user-merger", tenantId, level: "manager" as const, burst: false, keyId: "k-m" };
+const contributorAgent = { agentId: "c1", name: "Contributor Agent", ownerId: "user-contrib", tenantId, level: "working" as const, burst: false, keyId: "k-c" };
+const observerAgent = { agentId: "o1", name: "Observer Agent", ownerId: "user-obs", tenantId, level: "working" as const, burst: false, keyId: "k-o" };
 
 describe("lib/agent-api/mistakes", () => {
   beforeEach(() => {

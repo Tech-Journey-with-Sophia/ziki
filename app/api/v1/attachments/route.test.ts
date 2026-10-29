@@ -17,7 +17,7 @@ import { POST } from "./route";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 
-function key(level = "contributor") {
+function key(level = "working") {
   return {
     id: "key-a", revokedAt: null,
     agent: {
@@ -131,10 +131,8 @@ describe("POST /api/v1/attachments (#645)", () => {
     expect((await POST(upload(new File([big], "big.png")))).status).toBe(413);
   });
 
-  it("needs a contributor key, and a file", async () => {
+  it("needs an agent key, and a file", async () => {
     expect((await POST(upload(new File([PNG], "a.png"), { keyed: false }))).status).toBe(401);
-    db.agentApiKey.findUnique.mockResolvedValueOnce(key("observer"));
-    expect((await POST(upload(new File([PNG], "a.png")))).status).toBe(403);
     expect((await POST(upload(null))).status).toBe(400);
     expect(db.attachment.create).not.toHaveBeenCalled();
   });

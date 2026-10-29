@@ -17,7 +17,7 @@ vi.mock("@/lib/agent-api/resolve", () => ({ resolveMergedFix: mocks.resolve }));
 import { POST } from "./route";
 
 const PR = "https://github.com/acme/app/pull/12";
-const agent = { agentId: "a1", name: "a1", ownerId: "o1", tenantId: "tenant", level: "contributor", burst: false, keyId: "k", projectId: null };
+const agent = { agentId: "a1", name: "a1", ownerId: "o1", tenantId: "tenant", level: "working", burst: false, keyId: "k", projectId: null };
 const params = { params: Promise.resolve({ id: "bug1" }) };
 const PROJECT = "cmvggfa9v003yn72gfxaplftl";
 
@@ -38,13 +38,13 @@ describe("POST /api/v1/issues/[id]/resolve (Ziki #515)", () => {
     mocks.resolve.mockResolvedValue({ status: 200, body: { resolved: true, issueId: "bug1", previousStatus: "open", pullRequestUrl: PR } });
   });
 
-  it.each(["observer", "triager", "reviewer"])("denies resolution to the %s role", async (level) => {
+  it.each(["manager", "merger"])("lets a %s agent resolve too", async (level) => {
     mocks.requireAgent.mockResolvedValue({ ...agent, level });
-    expect((await POST(request({ pullRequestUrl: PR }), params)).status).toBe(403);
-    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect((await POST(request({ pullRequestUrl: PR }), params)).status).toBe(200);
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
   });
 
-  it("lets a contributor agent resolve, charged to the write budget", async () => {
+  it("lets a working agent resolve, charged to the write budget", async () => {
     const response = await POST(request({ pullRequestUrl: PR }), params);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ resolved: true, issueId: "bug1", previousStatus: "open", pullRequestUrl: PR });

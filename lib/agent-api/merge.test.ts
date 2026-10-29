@@ -1,3 +1,4 @@
+import type { AgentLevel } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { REVIEWER_POINTS, reviewerPointsAt } from "@/lib/points/rules";
 
@@ -83,7 +84,7 @@ function bugRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function merger(id: string, ownerId: string, level: "observer" | "contributor" | "reviewer" | "dispatcher" | "merger" | "admin_merger" = "merger") {
+function merger(id: string, ownerId: string, level: AgentLevel = "manager") {
   return { agentId: id, name: id, ownerId, tenantId: "tenant_zedu", level, burst: false, keyId: `key-${id}` };
 }
 
@@ -92,7 +93,7 @@ function confirmWith(ownerA: string, ownerB: string) {
   state.confirmations = [
     { agentId: `a-${ownerA}`, onBehalfOfUserId: ownerA, agent: { id: `a-${ownerA}`, ownerUserId: ownerA } },
     { agentId: `a-${ownerB}`, onBehalfOfUserId: ownerB, agent: { id: `a-${ownerB}`, ownerUserId: ownerB } },
-    { agentId: "a-tia", onBehalfOfUserId: "tia", agent: { id: "a-tia", ownerUserId: "tia", level: "triager" } },
+    { agentId: "a-tia", onBehalfOfUserId: "tia", agent: { id: "a-tia", ownerUserId: "tia", level: "working" } },
   ];
 }
 
@@ -141,19 +142,12 @@ beforeEach(() => {
 });
 
 describe("acceptFix: who may merge (#434)", () => {
-  it("rejects a dispatcher without merger level before touching the issue", async () => {
-    expect(await acceptFix(merger("d1", "dan", "dispatcher"), "bug1")).toMatchObject({
+  it("rejects a working agent before touching the issue: accepting needs a manager", async () => {
+    expect(await acceptFix(merger("c1", "cara", "working"), "bug1")).toMatchObject({
       status: 403,
       error: "insufficient_level",
     });
-    expect(db.bug.findFirst).not.toHaveBeenCalled();
-  });
-  it("rejects a contributor and a reviewer before touching the issue", async () => {
-    expect(await acceptFix(merger("c1", "cara", "contributor"), "bug1")).toMatchObject({
-      status: 403,
-      error: "insufficient_level",
-    });
-    expect(await acceptFix(merger("r1", "rob", "reviewer"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("r1", "rob", "working"), "bug1")).toMatchObject({
       status: 403,
       error: "insufficient_level",
     });
@@ -162,7 +156,7 @@ describe("acceptFix: who may merge (#434)", () => {
 
   it("is 404 for an issue outside the agent's tenant", async () => {
     db.bug.findFirst.mockResolvedValue(null);
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 404 });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 404 });
   });
 });
 
@@ -184,7 +178,7 @@ describe("acceptFix: the merger must be independent too (#493)", () => {
       bugRow({ claims: [{ status: "active", releasedAt: null, agentId: "w1", beneficiaryUserId: "ada", agent: { ownerUserId: "ada" } }] }),
     );
 
-    expect(await acceptFix(merger("m1", "ada", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "ada", "manager"), "bug1")).toMatchObject({
       status: 403,
       error: "not_independent",
     });
@@ -195,7 +189,7 @@ describe("acceptFix: the merger must be independent too (#493)", () => {
 
   it("refuses a merger whose owner is the ticket's reporter", async () => {
     db.bug.findFirst.mockResolvedValue(bugRow({ reporterId: "ada", beneficiaryUserId: "zoe" }));
-    expect(await acceptFix(merger("m1", "ada", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "ada", "manager"), "bug1")).toMatchObject({
       status: 403,
       error: "not_independent",
     });
@@ -203,7 +197,7 @@ describe("acceptFix: the merger must be independent too (#493)", () => {
 
   it("refuses a merger whose owner filed the ticket through its agent", async () => {
     db.bug.findFirst.mockResolvedValue(bugRow({ createdByAgent: { ownerUserId: "ada" }, beneficiaryUserId: "zoe" }));
-    expect(await acceptFix(merger("m1", "ada", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "ada", "manager"), "bug1")).toMatchObject({
       status: 403,
       error: "not_independent",
     });
@@ -213,7 +207,7 @@ describe("acceptFix: the merger must be independent too (#493)", () => {
     db.bug.findFirst.mockResolvedValue(
       bugRow({ claims: [{ status: "active", releasedAt: null, agentId: "w1", beneficiaryUserId: "zoe", agent: { ownerUserId: "ada" } }] }),
     );
-    expect(await acceptFix(merger("m1", "ada", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "ada", "manager"), "bug1")).toMatchObject({
       status: 403,
       error: "not_independent",
     });
@@ -223,14 +217,14 @@ describe("acceptFix: the merger must be independent too (#493)", () => {
     confirmWith("rob", "sam");
     verdict("r1", "rob");
     verdict("r2", "sam");
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 200, accepted: true });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 200, accepted: true });
   });
 
   it("leaves a comment on the issue saying the fix was merged (#458)", async () => {
     confirmWith("rob", "sam");
     verdict("r1", "rob");
     verdict("r2", "sam");
-    expect(await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() })).toMatchObject({ status: 200, accepted: true });
+    expect(await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() })).toMatchObject({ status: 200, accepted: true });
     expect(db.comment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -251,19 +245,19 @@ describe("acceptFix: the merger must be independent too (#493)", () => {
     confirmWith("rob", "sam");
     verdict("r1", "rob");
     verdict("r2", "sam");
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({
       status: 409,
       missing: "verdicts",
     });
     verdict("r3", "kim");
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 200, accepted: true });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 200, accepted: true });
   });
 });
 
 describe("acceptFix: the gate (#434)", () => {
   it("names the missing condition: already accepted", async () => {
     db.bug.findFirst.mockResolvedValue(bugRow({ status: "resolved" }));
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({
       status: 409,
       missing: "already_accepted",
     });
@@ -271,7 +265,7 @@ describe("acceptFix: the gate (#434)", () => {
 
   it("names the missing condition: no active claim", async () => {
     db.bug.findFirst.mockResolvedValue(bugRow({ claims: [] }));
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({
       status: 409,
       missing: "claim",
     });
@@ -281,7 +275,7 @@ describe("acceptFix: the gate (#434)", () => {
 
   it("names the missing condition: no linked pull request", async () => {
     db.bug.findFirst.mockResolvedValue(bugRow({ pullRequestUrl: null }));
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({
       status: 409,
       missing: "pull_request",
     });
@@ -299,7 +293,7 @@ describe("acceptFix: the gate (#434)", () => {
       unresolvedCodeRabbitThreads: vi.fn(async () => 0),
       mergePullRequest: vi.fn(),
     };
-    const result = await acceptFix(merger("m1", "mo", "merger"), "bug1", { client });
+    const result = await acceptFix(merger("m1", "mo", "manager"), "bug1", { client });
     expect(result).toMatchObject({
       status: 409,
       error: "not_ready",
@@ -320,7 +314,7 @@ describe("acceptFix: the gate (#434)", () => {
         project: { repoUrl: "https://github.com/zedu/web", githubInstallationId: "123" },
       }),
     );
-    const result = await acceptFix(merger("m1", "mo", "merger"), "bug1");
+    const result = await acceptFix(merger("m1", "mo", "manager"), "bug1");
     expect(result).toMatchObject({
       status: 409,
       error: "not_ready",
@@ -333,25 +327,25 @@ describe("acceptFix: the gate (#434)", () => {
 
   it("names the missing condition: a redesign is waiting for a person", async () => {
     redesign.assertRedesignOpen.mockRejectedValue(new IssueApiError(409, "This redesign is waiting for a person."));
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 409, missing: "redesign" });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 409, missing: "redesign" });
   });
 
   it("names the missing condition: not confirmed", async () => {
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 409, missing: "confirmation" });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 409, missing: "confirmation" });
     expect(db.bug.update).not.toHaveBeenCalled();
   });
 
   it("names the missing condition: fewer than two countable verdicts", async () => {
     confirmWith("rob", "sam");
     verdict("r1", "rob");
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 409, missing: "verdicts" });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 409, missing: "verdicts" });
   });
 
   it("counts two verdicts from the same owner once", async () => {
     confirmWith("rob", "sam");
     verdict("r1", "rob");
     verdict("r2", "rob");
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 409, missing: "verdicts" });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 409, missing: "verdicts" });
   });
 
   it("drops a verdict from the claim holder's side", async () => {
@@ -361,7 +355,7 @@ describe("acceptFix: the gate (#434)", () => {
     );
     verdict("r1", "rob");
     verdict("r2", "rob");
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 409, missing: "verdicts" });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 409, missing: "verdicts" });
   });
 });
 
@@ -375,7 +369,7 @@ describe("acceptFix: dispatcher completion reward", () => {
       { status: "active", releasedAt: null, agentId: "solver-agent", beneficiaryUserId: "ada", dispatcherUserId: "dispatcher-owner", agent: { ownerUserId: "ada" } },
     ] }));
 
-    expect(await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() })).toMatchObject({ status: 200 });
+    expect(await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() })).toMatchObject({ status: 200 });
     const rewards = db.pointEntry.createMany.mock.calls.flatMap((call) => call[0].data).filter((entry) => entry.role === "dispatcher");
     expect(rewards).toEqual([{
       tenantId: "tenant_zedu", bugId: "bug1", userId: "dispatcher-owner",
@@ -410,7 +404,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r1", "rob");
     verdict("r2", "sam");
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() });
     expect(result).toMatchObject({ status: 200, accepted: true, solverUserId: "ada" });
     expect(db.bug.update).toHaveBeenCalledWith({ where: { id: "bug1" }, data: { status: "resolved", reviewStatus: "merged" } });
     expect(db.bugActivity.create).toHaveBeenCalledWith({
@@ -454,7 +448,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r1", "rob", "rob", PR, "older-sha");
     verdict("r2", "sam", "sam", PR, "reviewed-sha");
 
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 200, accepted: true });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 200, accepted: true });
     expect(db.agentAuditEvent.create.mock.calls[0][0].data).toMatchObject({
       payload: { pullRequestUrl: PR, headSha: "reviewed-sha" },
     });
@@ -465,7 +459,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r1", "rob", "rob", PR, null);
     verdict("r2", "sam", "sam", PR, null);
 
-    expect(await acceptFix(merger("m1", "mo", "merger"), "bug1")).toMatchObject({ status: 200, accepted: true });
+    expect(await acceptFix(merger("m1", "mo", "manager"), "bug1")).toMatchObject({ status: 200, accepted: true });
     expect(db.agentAuditEvent.create.mock.calls[0][0].data).toMatchObject({
       payload: { pullRequestUrl: PR, headSha: "linked-sha" },
     });
@@ -479,7 +473,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       claims: [{ status: "active", releasedAt: null, agentId: "solver-agent", beneficiaryUserId: "ada", agent: { ownerUserId: "ada" } }],
     }));
 
-    expect(await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() })).toMatchObject({ status: 200, accepted: true });
+    expect(await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() })).toMatchObject({ status: 200, accepted: true });
     expect(db.issueClaim.updateMany).toHaveBeenCalledWith({
       where: { bugId: "bug1", status: "active", releasedAt: null },
       data: { status: "released", releasedAt: expect.any(Date), releaseReason: "resolved" },
@@ -492,7 +486,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r2", "sam", "sam");
     verdict("r3", "tia", "tia");
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() });
     expect(result).toMatchObject({ status: 200, rewardedReviewerUserIds: ["rob", "sam", "tia"] });
     const awards = db.pointEntry.createMany.mock.calls.map((call) => call[0].data[0]);
     const reviewerAwards = awards.filter((a) => a.role === "reviewer");
@@ -508,7 +502,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     confirmWith("rob", "sam");
     verdict("r1", "rob");
     verdict("r2", "sam");
-    const result = await acceptFix(merger("m1", "mo", "merger"), "bug1");
+    const result = await acceptFix(merger("m1", "mo", "manager"), "bug1");
     expect(result).toMatchObject({ status: 200, accepted: true, readyToMerge: true });
     expect(db.pointEntry.createMany).not.toHaveBeenCalled();
     expect(db.bugActivity.create).toHaveBeenCalledWith({
@@ -530,7 +524,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r1", "rob", "claimant");
     verdict("r2", "sam", "sam");
 
-    const result = await acceptFix(merger("m1", "mo", "merger"), "bug1");
+    const result = await acceptFix(merger("m1", "mo", "manager"), "bug1");
     expect(result).toMatchObject({ status: 409, error: "not_ready", missing: "verdicts" });
     expect(db.pointEntry.createMany).not.toHaveBeenCalled();
   });
@@ -543,7 +537,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       bugRow({ assigneeId: "ada", claims: [{ status: "active", releasedAt: null, agentId: "w1", beneficiaryUserId: "zoe", agent: { ownerUserId: "zoe" } }] }),
     );
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() });
     expect(result).toMatchObject({ solverUserId: "zoe" });
     const awards = db.pointEntry.createMany.mock.calls.map((call) => call[0].data[0]);
     expect(awards).toContainEqual(expect.objectContaining({ role: "solver", userId: "zoe", sourceKey: "solver:bug1:zoe" }));
@@ -564,7 +558,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       }],
     }));
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() });
     expect(result).toMatchObject({ status: 200, solverUserId: null });
     const awards = db.pointEntry.createMany.mock.calls.map((call) => call[0].data[0]);
     expect(awards.some((a) => a.role === "solver")).toBe(false);
@@ -576,7 +570,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r2", "sam");
     db.bug.findFirst.mockResolvedValue(bugRow({ status: "in_progress" }));
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() });
     expect(result).toMatchObject({ status: 200, accepted: true });
     expect(db.bugActivity.create).toHaveBeenCalledWith({
       data: {
@@ -596,7 +590,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     db.agentMistake.create.mockResolvedValue({ id: "m-1", title: "Missing unit tests", category: "correctness", recurrenceCount: 1 });
     db.comment.create.mockResolvedValue({ id: "c-1" });
 
-    const result = await acceptFix(merger("m1", "mo", "merger"), "bug1", {}, {
+    const result = await acceptFix(merger("m1", "mo", "manager"), "bug1", {}, {
       verdict: "reject",
       notes: "Tests missing for edge case.",
       mistake: {
@@ -628,7 +622,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     db.bug.findFirst.mockResolvedValue(bugRow());
     db.comment.create.mockResolvedValue({ id: "c-1" });
 
-    const result = await acceptFix(merger("m1", "mo", "merger"), "bug1", {}, {
+    const result = await acceptFix(merger("m1", "mo", "manager"), "bug1", {}, {
       action: "reject",
       feedback: "Feedback via action field.",
     });
@@ -652,7 +646,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     verdict("r2", "sam");
     db.bug.findFirst.mockResolvedValue(bugRow());
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: null });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: null });
 
     expect(result).toMatchObject({ status: 409, error: "not_ready", missing: "github_app" });
     expect(db.bug.update).toHaveBeenCalledWith({ where: { id: "bug1" }, data: { reviewStatus: "merge_blocked" } });
@@ -676,7 +670,7 @@ describe("acceptFix: a successful accept (#434)", () => {
 
     let result;
     try {
-      result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1");
+      result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1");
     } finally {
       vi.unstubAllEnvs();
     }
@@ -692,7 +686,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     db.bug.findFirst.mockResolvedValue(bugRow());
     const client = defaultMockGhClient({ unresolvedCodeRabbitThreads: vi.fn(async () => 2) });
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
 
     expect(result).toMatchObject({ status: 409, missing: "review_threads", message: expect.stringContaining("2 unresolved review threads") });
     expect(client.mergePullRequest).not.toHaveBeenCalled();
@@ -707,7 +701,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     db.bug.findFirst.mockResolvedValue(bugRow());
     const client = defaultMockGhClient({ unresolvedCodeRabbitThreads: vi.fn(async () => { throw new Error("down"); }) });
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
 
     expect(result).toMatchObject({ status: 409, missing: "review_threads" });
     expect(client.mergePullRequest).not.toHaveBeenCalled();
@@ -721,7 +715,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     db.bug.findFirst.mockResolvedValue(bugRow());
     const client = defaultMockGhClient({ mergePullRequest: vi.fn(async () => ({ merged: false, forbidden: true })) });
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
 
     expect(result).toMatchObject({ status: 409, missing: "github_merge_failed" });
     expect(db.bug.update).toHaveBeenCalledWith({ where: { id: "bug1" }, data: { reviewStatus: "merge_failed" } });
@@ -738,7 +732,7 @@ describe("acceptFix: a successful accept (#434)", () => {
     db.bug.findFirst.mockResolvedValue(bugRow());
     const forged = { commitSha: "forged-sha", mergeCommitSha: "forged-sha" } as Parameters<typeof executeAdminMerge>[3];
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client: defaultMockGhClient() }, forged);
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client: defaultMockGhClient() }, forged);
 
     expect(result).toMatchObject({ status: 200, merged: true, mergeCommitSha: "git-merge-commit-sha" });
     expect(db.comment.create).toHaveBeenCalledWith(
@@ -758,7 +752,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       mergePullRequest: vi.fn(),
     };
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
     expect(result).toMatchObject({
       status: 409,
       error: "not_ready",
@@ -793,7 +787,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       mergePullRequest: vi.fn(),
     };
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
     expect(result).toMatchObject({
       status: 409,
       missing: "deployment_verification",
@@ -816,7 +810,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       mergePullRequest: vi.fn(),
     };
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
     expect(result).toMatchObject({
       status: 409,
       error: "not_ready",
@@ -840,7 +834,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       mergePullRequest: vi.fn(async () => ({ merged: false, conflict: true })),
     };
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
     expect(result).toMatchObject({
       status: 409,
       error: "not_ready",
@@ -872,7 +866,7 @@ describe("acceptFix: a successful accept (#434)", () => {
       mergePullRequest: vi.fn(async () => ({ merged: true, sha: "git-merge-commit-sha-999" })),
     };
 
-    const result = await executeAdminMerge(merger("m1", "mo", "admin_merger"), "bug1", { client });
+    const result = await executeAdminMerge(merger("m1", "mo", "merger"), "bug1", { client });
     expect(result).toMatchObject({
       status: 200,
       accepted: true,

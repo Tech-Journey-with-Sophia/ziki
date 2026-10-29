@@ -25,7 +25,7 @@ async function ownerMayPostJob(agent: {
 
 /** GET ?projectId= — the project's research jobs, newest first (#617). */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "jobs.list", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "jobs.list", "read", null, async (agent) => {
     const scope = await issueProject(agent, request.nextUrl.searchParams);
     return NextResponse.json({ jobs: await listJobs(scope.tenantId, scope.projectId) });
   });
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 /** POST JSON with brief, dedupeKey, maxSubmissions, pointsPerAccepted, optional submissionSchema. */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "jobs.create", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "jobs.create", "working", null, async (agent) => {
     // #512: a job pays points out of the ledger, so minting one is an
     // organization admin's decision. The web form says the same
     // ("Only an organization admin can post a job."); the API used to let

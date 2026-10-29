@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * Body: `{ "body": "…", "bugId": "…" }` (bugId optional).
  */
 export async function POST(request: NextRequest) {
-  return agentIssueRequest(request, "questions.ask", "contributor", null, async (agent) => {
+  return agentIssueRequest(request, "questions.ask", "working", null, async (agent) => {
     const parsed = agentQuestionSchema.safeParse(await issueJson(request));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid question.", details: parsed.error.issues }, { status: 400 });

@@ -31,7 +31,7 @@ describe("startAgentConnectAction", () => {
   it("registers the named agent and returns setup text carrying its key", async () => {
     createAgent.mockResolvedValue({
       ok: true,
-      key: { agentId: "agent_1", name: "Claude", level: "contributor", rawKey: "zk_secret", prefix: "zk_sec" },
+      key: { agentId: "agent_1", name: "Claude", level: "working", rawKey: "zk_secret", prefix: "zk_sec" },
     });
 
     const result = await startAgentConnectAction({ name: "Claude", projectId: "proj_1" });

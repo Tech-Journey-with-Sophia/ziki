@@ -23,7 +23,7 @@ describe.runIf(enabled)("project notes PostgreSQL concurrency", () => {
     const tenant = await prisma.tenant.create({ data: { slug: `notes-${suffix}`, name: "Notes integration" } });
     tenantId = tenant.id;
     await prisma.membership.create({ data: { tenantId, userId, role: "owner" } });
-    const agent = await prisma.agent.create({ data: { tenantId, ownerUserId: userId, name: "Notes integration agent", level: "contributor" } });
+    const agent = await prisma.agent.create({ data: { tenantId, ownerUserId: userId, name: "Notes integration agent", level: "working" } });
     agentId = agent.id;
   });
   afterAll(async () => {
@@ -34,7 +34,7 @@ describe.runIf(enabled)("project notes PostgreSQL concurrency", () => {
   async function fixture(): Promise<NotesActor> {
     const project = await prisma.project.create({ data: { tenantId, slug: `project-${projectIds.length}`, name: "Notes project" } });
     projectIds.push(project.id);
-    const agent: AgentContext = { agentId, ownerId: userId, tenantId, name: "Notes integration agent", level: "contributor", keyId: "test", projectId: project.id, burst: false };
+    const agent: AgentContext = { agentId, ownerId: userId, tenantId, name: "Notes integration agent", level: "working", keyId: "test", projectId: project.id, burst: false };
     return agentNotesActor(agent, project.id);
   }
   const initial = { body: "Use migrations only.", reason: "Initial guidance", expectedVersion: 0 };

@@ -43,7 +43,7 @@ export const maxDuration = 60;
  * Rate: charged as a read.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "events.poll", "observer", null, async (agent) => {
+  return agentIssueRequest(request, "events.poll", "read", null, async (agent) => {
     const params = request.nextUrl.searchParams;
 
     const cursorResult = parseEventCursor(params);

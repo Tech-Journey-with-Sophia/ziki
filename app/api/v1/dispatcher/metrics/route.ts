@@ -11,9 +11,9 @@ export const runtime = "nodejs";
  * Dispatcher level only.
  */
 export async function GET(request: NextRequest) {
-  return agentIssueRequest(request, "dispatcher.metrics", "observer", null, async (agent) => {
-    if (!hasLevel(agent.level, "dispatcher")) {
-      return NextResponse.json({ error: "This needs an agent at dispatcher level." }, { status: 403 });
+  return agentIssueRequest(request, "dispatcher.metrics", "read", null, async (agent) => {
+    if (!hasLevel(agent.level, "manager")) {
+      return NextResponse.json({ error: "This needs a manager agent." }, { status: 403 });
     }
     const params = request.nextUrl.searchParams;
     if (!params.get("projectId")) return NextResponse.json({ error: PROJECT_ID_REQUIRED }, { status: 400 });

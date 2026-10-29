@@ -126,7 +126,7 @@ describe("IssueProgressReport (#1446)", () => {
     expect(screen.queryByRole("button", { name: /^All/ })).not.toBeInTheDocument();
   });
 
-  it("summarises merger and admin-merger decisions under their stages", () => {
+  it("summarises manager and merger agent decisions under their stages", () => {
     renderPage(decisions, "live");
     expect(summary("Live").getByText("1 Deployed")).toBeInTheDocument();
     expect(summary("Live").getByText("Merged and deployed.")).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("IssueProgressReport (#1446)", () => {
     expect(summary("Ready to merge").getByText("1 Ready to merge")).toBeInTheDocument();
     expect(summary("Ready to merge").getByText("1 Deployment failed")).toBeInTheDocument();
     expect(
-      summary("Ready to merge").getByText("Merger agent marked it ready to merge. 1 deployment failed."),
+      summary("Ready to merge").getByText("Manager agent marked it ready to merge. 1 deployment failed."),
     ).toBeInTheDocument();
   });
 

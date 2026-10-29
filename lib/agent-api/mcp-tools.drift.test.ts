@@ -48,8 +48,9 @@ const ROUTE_SCHEMAS: Record<string, z.ZodType> = {
   ziki_record_project_mistake: recordMistakeSchema,
 };
 
-// The agent routes extend the shared issue and comment schemas with attachmentIds (lib/agent-api/issues.ts).
-const AGENT_LAYER_FIELDS = new Set(["attachmentIds"]);
+// The agent routes extend the shared issue and comment schemas with attachmentIds, and
+// issue creation with acknowledgeSimilar (lib/agent-api/issues.ts `createSchema`).
+const AGENT_LAYER_FIELDS = new Set(["attachmentIds", "acknowledgeSimilar"]);
 
 // Fields on the shared schema that the agent route deliberately does not take (it picks only some of
 // them, and severity is set by reviewers), so a tool must not offer them.

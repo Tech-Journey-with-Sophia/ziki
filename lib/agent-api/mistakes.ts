@@ -46,7 +46,7 @@ export type AgentMistakeItem = {
 
 /**
  * Record a mistake or anti-pattern discovered during review or merge.
- * Requires merger or admin_merger permission.
+ * Requires a manager or merger agent.
  */
 export async function recordMistake(
   agent: AgentContext,
@@ -54,7 +54,7 @@ export async function recordMistake(
   rawInput: unknown,
   db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<{ ok: true; mistake: AgentMistakeItem }> {
-  if (!hasLevel(agent.level, "merger")) {
+  if (!hasLevel(agent.level, "manager")) {
     throw new Error("Only merger agents can record anti-patterns in the mistake registry.");
   }
 
@@ -141,7 +141,7 @@ export async function listProjectMistakes(
   options: { category?: MistakeCategory; limit?: number } = {},
   db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<AgentMistakeItem[]> {
-  requireLevel(agent, "observer");
+  requireLevel(agent, "working");
 
   const project = await db.project.findFirst({
     where: { id: projectId, tenantId: agent.tenantId },

@@ -19,7 +19,7 @@ function request(path = "/inbox", method = "GET", body?: unknown, key = true) {
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 }
-function key(level = "observer") {
+function key(level = "working") {
   return { id: "key-a", revokedAt: null, agent: { id: "agent-bob", name: "Bob's agent", ownerUserId: "bob", tenantId: "tenant-a", level, burst: false, revokedAt: null, owner: { memberships: [{ tenantId: "tenant-a" }] } } };
 }
 const item = { id: "item-1", kind: "reply", eventId: "event-1", eventType: "comment.created", bugId: "bug-1", commentId: "c2",

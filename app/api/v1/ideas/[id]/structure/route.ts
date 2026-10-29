@@ -13,7 +13,7 @@ type Params = { id: string };
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
   const { id: bugId } = await params;
-  return agentIssueRequest(request, "ideas.structure", "contributor", bugId, async (agent) => {
+  return agentIssueRequest(request, "ideas.structure", "working", bugId, async (agent) => {
     const body = (await issueJson(request).catch(() => ({}))) as IdeaStructureInput & { title?: string };
 
     const bug = await prisma.bug.findUnique({

@@ -49,7 +49,7 @@ beforeEach(() => {
   db.membership.findMany.mockResolvedValue([{ tenantId: "tenant_zedu", role: "member", tenant: { slug: "zedu" } }]);
   db.project.findFirst.mockResolvedValue({ id: "project_zedu" });
   db.agent.create.mockResolvedValue({ id: "agent9", name: "Ada's Claude" });
-  db.agent.findUnique.mockResolvedValue({ level: "contributor" });
+  db.agent.findUnique.mockResolvedValue({ level: "working" });
 });
 
 describe("startPairing (#427)", () => {
@@ -66,21 +66,26 @@ describe("startPairing (#427)", () => {
   });
 
   it("stores the level the agent asked for (#425)", async () => {
-    const result = await startPairing({ name: "Ada", level: "triager" }, NOW);
+    const result = await startPairing({ name: "Ada", level: "working" }, NOW);
     expect(result.ok).toBe(true);
-    expect(db.agentPairing.create.mock.calls[0][0].data.proposedLevel).toBe("triager");
+    expect(db.agentPairing.create.mock.calls[0][0].data.proposedLevel).toBe("working");
   });
 
-  it("accepts specialist roles but refuses admin-only roles and unknown roles", async () => {
-    for (const level of ["observer", "contributor", "triager", "reviewer"]) {
+  it("accepts working (and old role names that map to it) but refuses admin-granted classes and unknown levels", async () => {
+    for (const level of ["working", "observer", "contributor", "triager", "reviewer"]) {
       expect(await startPairing({ name: "Ada", level }, NOW)).toMatchObject({ ok: true });
+      expect(db.agentPairing.create.mock.calls.at(-1)![0].data.proposedLevel).toBe("working");
     }
-    expect(await startPairing({ name: "Ada", level: "dispatcher" }, NOW)).toMatchObject({ ok: false });
-    const merger = await startPairing({ name: "Ada", level: "merger" }, NOW);
-    expect(merger).toMatchObject({ ok: false });
-    if (!merger.ok) expect(merger.error).toContain("merger");
-    expect(await startPairing({ name: "Ada", level: "wizard" }, NOW)).toMatchObject({ ok: false });
-    expect(db.agentPairing.create.mock.calls.at(-1)![0].data.proposedLevel).toBe("reviewer");
+    const created = db.agentPairing.create.mock.calls.length;
+    for (const level of ["manager", "merger", "dispatcher", "admin_merger"]) {
+      const refused = await startPairing({ name: "Ada", level }, NOW);
+      expect(refused).toMatchObject({ ok: false });
+      if (!refused.ok) expect(refused.error).toBe("Agents cannot register as manager or merger agents. A tenant admin grants these classes later.");
+    }
+    const unknown = await startPairing({ name: "Ada", level: "wizard" }, NOW);
+    expect(unknown).toMatchObject({ ok: false });
+    if (!unknown.ok) expect(unknown.error).toBe("Unknown level. Send one of: working.");
+    expect(db.agentPairing.create).toHaveBeenCalledTimes(created);
     await startPairing({ name: "Ada" }, NOW);
     expect(db.agentPairing.create.mock.calls.at(-1)![0].data.proposedLevel).toBe(DEFAULT_AGENT_LEVEL);
   });
@@ -141,16 +146,16 @@ describe("approvePairing (#427)", () => {
       approvedAt: null,
       ownerUserId: null,
       expiresAt: { gt: NOW },
-      OR: [{ proposedLevel: null }, { proposedLevel: { in: ["observer", "contributor", "triager", "reviewer"] } }],
+      OR: [{ proposedLevel: null }, { proposedLevel: { in: ["working"] } }],
     });
     expect(data).toEqual({ ownerUserId: "ada", tenantId: "tenant_zedu", projectId: "project_zedu", approvedAt: NOW });
   });
 
   it("creates the agent at the requested level stored at pairing start (#425)", async () => {
     db.agentPairing.updateMany.mockResolvedValue({ count: 1 });
-    db.agentPairing.findUnique.mockResolvedValue({ id: "p1", proposedName: "Ada", proposedModel: null, proposedLevel: "reviewer" });
+    db.agentPairing.findUnique.mockResolvedValue({ id: "p1", proposedName: "Ada", proposedModel: null, proposedLevel: "working" });
     await approvePairing({ id: "ada" }, "ABCD-2345", NOW, "project_zedu");
-    expect(db.agent.create.mock.calls[0][0].data.level).toBe("reviewer");
+    expect(db.agent.create.mock.calls[0][0].data.level).toBe("working");
   });
 
   it("creates the agent with the instructions the owner approved, not the agent's proposal (#431)", async () => {
@@ -265,12 +270,12 @@ describe("collectPairing (#427)", () => {
   });
 
   it("reports the level the agent actually has, if the owner changed it after approval", async () => {
-    db.agentPairing.findUnique.mockResolvedValue({ ...approved, agentId: "agent9", proposedLevel: "dispatcher" });
-    db.agent.findUnique.mockResolvedValue({ level: "observer" });
+    db.agentPairing.findUnique.mockResolvedValue({ ...approved, agentId: "agent9", proposedLevel: "working" });
+    db.agent.findUnique.mockResolvedValue({ level: "manager" });
     db.agentPairing.updateMany.mockResolvedValue({ count: 1 });
     const result = await collectPairing(DEVICE, NOW);
     expect(result.status).toBe("issued");
-    if (result.status === "issued") expect(result.key.level).toBe("observer");
+    if (result.status === "issued") expect(result.key.level).toBe("manager");
   });
 
   it("creates the agent for the approver at the shared default, and returns its key once", async () => {
@@ -289,7 +294,7 @@ describe("collectPairing (#427)", () => {
     expect(db.agentPairing.update.mock.calls[0][0].data).toEqual({ agentId: "agent9" });
   });
 
-  it.each(["dispatcher", "merger"])("rejects an old approved %s pairing that has not created an agent", async (proposedLevel) => {
+  it.each(["manager", "merger"])("rejects an old approved %s pairing that has not created an agent", async (proposedLevel) => {
     db.agentPairing.findUnique.mockResolvedValue({ ...approved, proposedLevel });
     expect(await collectPairing(DEVICE, NOW)).toEqual({ status: "invalid" });
     expect(db.agent.create).not.toHaveBeenCalled();

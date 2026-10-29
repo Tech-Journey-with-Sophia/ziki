@@ -25,7 +25,7 @@ async function scopeFor(agent: Parameters<typeof issueProject>[0], request: Next
 /** POST records the agent's owner as one upvote. Repeating it does not add another. */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.vote", "comment", id, async (agent) => {
+  return agentIssueRequest(request, "issues.vote", "working", id, async (agent) => {
     const scope = await scopeFor(agent, request);
     if (scope instanceof NextResponse) return scope;
     const result = await upvoteIssue(agent, scope.projectId, id);
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 /** DELETE removes that owner's upvote. */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return agentIssueRequest(request, "issues.vote_remove", "comment", id, async (agent) => {
+  return agentIssueRequest(request, "issues.vote_remove", "working", id, async (agent) => {
     const scope = await scopeFor(agent, request);
     if (scope instanceof NextResponse) return scope;
     const result = await removeUpvote(agent, scope.projectId, id);

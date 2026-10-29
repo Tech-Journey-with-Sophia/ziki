@@ -22,7 +22,7 @@ const agent = {
   name: "Ada's Claude",
   ownerId: "ada",
   tenantId: "tenant",
-  level: "contributor" as const,
+  level: "working" as const,
   burst: false,
   keyId: "key-ada",
 };
@@ -60,7 +60,8 @@ describe("manual issue offers (#590)", () => {
     expect(db.issueClaim.create).not.toHaveBeenCalled();
     expect(db.issueClaim.update).not.toHaveBeenCalled();
     expect(notifyClaimOffered).not.toHaveBeenCalled();
-  });  it("blocks with 409 waiting_for_human when human approval is required before offer (#598)", async () => {
+  });
+  it("blocks with 409 waiting_for_human when human approval is required before offer (#598)", async () => {
     (db as Record<string, unknown>).approvalRule = {
       findMany: vi.fn(async () => [
         { id: "rule-1", stage: "before_offer", issueTypeId: null, severity: null, fileGlob: null },

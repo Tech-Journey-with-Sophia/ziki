@@ -48,7 +48,7 @@ const agent = {
   name: "Ada's Claude",
   ownerId: "user1",
   tenantId: "tenant1",
-  level: "contributor" as const,
+  level: "working" as const,
   burst: false,
   keyId: "k1",
   projectId: null,
@@ -99,12 +99,13 @@ describe("POST /api/v1/goals (#616)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("403s for an observer", async () => {
-    mocks.requireAgent.mockResolvedValue({ ...agent, level: "observer" });
+  it("lets any working agent create a goal, charged to the write budget", async () => {
+    mocks.requireAgent.mockResolvedValue({ ...agent, level: "working" });
     const res = await createPOST(
       request("http://localhost/api/v1/goals?projectId=project1", { title: "Ship the auth audit", budgetPool: 1 }),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
+    expect(mocks.budget).toHaveBeenCalledWith(expect.objectContaining({ id: "agent1" }), "write");
   });
 });
 
@@ -195,8 +196,8 @@ describe("POST /api/v1/goals/[id]/allocations (#616)", () => {
     expect(res.status).toBe(409);
   });
 
-  it("403s a split for an observer", async () => {
-    mocks.requireAgent.mockResolvedValue({ ...agent, level: "observer" });
+  it("lets any working agent split a pool, charged to the write budget", async () => {
+    mocks.requireAgent.mockResolvedValue({ ...agent, level: "working" });
     const res = await splitPOST(
       request("http://localhost/api/v1/goals/goal1/allocations?projectId=project1", {
         method: "even",
@@ -205,7 +206,8 @@ describe("POST /api/v1/goals/[id]/allocations (#616)", () => {
       }),
       { params: Promise.resolve({ id: "goal1" }) },
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
+    expect(mocks.budget).toHaveBeenCalledWith(expect.objectContaining({ id: "agent1" }), "write");
   });
 });
 

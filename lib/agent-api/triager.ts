@@ -20,7 +20,7 @@ export async function findTriageableIssues(
   projectId: string,
   limit = 50,
 ): Promise<TriageableIssue[]> {
-  requireLevel(agent, "triager");
+  requireLevel(agent, "working");
 
   const candidates = await prisma.bug.findMany({
     where: {
@@ -44,6 +44,7 @@ export async function findTriageableIssues(
       reporterId: true,
       beneficiaryUserId: true,
       createdByAgentId: true,
+      createdByAgent: { select: { ownerUserId: true } },
       createdAt: true,
       claims: {
         where: { status: "active", releasedAt: null },
@@ -61,6 +62,7 @@ export async function findTriageableIssues(
       reporterId: bug.reporterId,
       beneficiaryUserId: bug.beneficiaryUserId,
       createdByAgentId: bug.createdByAgentId,
+      createdByAgent: bug.createdByAgent,
       claims: bug.claims.map((c) => ({
         status: "active" as const,
         releasedAt: null,

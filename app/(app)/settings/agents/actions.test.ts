@@ -86,7 +86,7 @@ describe("pairAgentAction instructions (#431)", () => {
       id: "p1",
       proposedName: "Ada's Claude",
       proposedModel: "Claude",
-      proposedLevel: "contributor",
+      proposedLevel: "working",
       proposedInstructions: "Focus on desktop bugs.",
       expiresAt: new Date(),
     });
