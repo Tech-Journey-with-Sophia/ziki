@@ -211,7 +211,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Profile
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <DisplayNameForm initialName={settings?.name ?? user.name ?? ""} />
             <p className="mt-3 text-sm">
@@ -227,7 +227,7 @@ export default async function SettingsPage({
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                   Password
                 </h3>
-                <span className="text-[11px] text-slate-400">Personal</span>
+                <span className="text-[11px] font-medium text-slate-600">Personal</span>
               </div>
               <p className="mt-2 text-sm text-slate-600">Changing your password signs out all active sessions.</p>
               <ChangePasswordForm />
@@ -239,7 +239,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Wallet
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <WalletAddressForm initialAddress={settings?.walletAddress ?? ""} />
           </section>
@@ -249,7 +249,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Security &amp; 2FA
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <p className="mt-2 text-sm text-slate-600">
               Protect your personal account with a second step at sign-in.
@@ -266,7 +266,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Appearance
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <ThemeSettings initialTheme={parseTheme(settings?.theme)} />
           </section>
@@ -276,7 +276,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Email notifications
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <p className="mt-2 text-sm text-slate-600">
               Sent to <span className="font-medium text-slate-800">{settings?.email}</span>.
@@ -297,7 +297,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Keyboard shortcuts
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <KeyboardShortcutSettings initialEnabled={settings?.keyboardShortcuts ?? true} />
           </section>
@@ -307,7 +307,7 @@ export default async function SettingsPage({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 Account data &amp; deletion
               </h3>
-              <span className="text-[11px] text-slate-400">Personal</span>
+              <span className="text-[11px] font-medium text-slate-600">Personal</span>
             </div>
             <AccountDataSettings />
           </section>
