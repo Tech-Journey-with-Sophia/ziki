@@ -1,11 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { fetchDashboard, type Breakdown, type WeekPoint } from "@/lib/dashboard-queries";
+import { prisma } from "@/lib/prisma";
+import { currentTenantIdFor } from "@/lib/tenant-context";
+import { paginatedTenantLeaderboard } from "@/lib/points/leaderboard";
+import { Avatar } from "@/components/avatar";
+import { fetchDashboard, type Breakdown } from "@/lib/dashboard-queries";
 import {
   RANGE_PRESETS,
   formatDateParam,
-  formatDuration,
   isPreset,
   parseDateRange,
   presetRange,
@@ -26,13 +29,32 @@ export default async function DashboardPage({
 }: {
   searchParams?: SearchParams;
 }) {
-  await requireAdmin();
+  const user = await requireAdmin();
 
   const params = searchParams ? await searchParams : {};
   const range = parseDateRange({ from: one(params.from), to: one(params.to) });
   const data = await fetchDashboard(range);
 
+  const tenantId = await currentTenantIdFor(user.id);
+  const { entries: leaderboardRows } = tenantId
+    ? await paginatedTenantLeaderboard(prisma, tenantId, { page: 1, limit: 5 })
+    : { entries: [] };
+
+  const contributorIds = leaderboardRows.map((e) => e.userId);
+  const agentOwners =
+    contributorIds.length > 0 && tenantId
+      ? await prisma.agent.findMany({
+          where: { tenantId, ownerUserId: { in: contributorIds }, revokedAt: null },
+          select: { ownerUserId: true },
+        })
+      : [];
+  const agentOwnerIds = new Set(agentOwners.map((a) => a.ownerUserId));
+
   const statusTotal = data.byStatus.reduce((sum, s) => sum + s.count, 0);
+  const inProgressCount = data.byStatus
+    .filter((s) => s.status === "in_progress" || s.status === "assigned" || s.status === "started")
+    .reduce((sum, s) => sum + s.count, 0);
+  const openBacklog = Math.max(0, statusTotal - data.totalClosed);
 
   return (
     <div className="space-y-6">
@@ -42,7 +64,7 @@ export default async function DashboardPage({
         </Link>
         <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-600">
-          Issues created between{" "}
+          Activity and issue velocity between{" "}
           <span className="font-medium text-slate-800">
             {formatDateParam(range.from)}
           </span>{" "}
@@ -50,7 +72,6 @@ export default async function DashboardPage({
           <span className="font-medium text-slate-800">
             {formatDateParam(new Date(range.to.getTime() - 86400000))}
           </span>
-          . Deleted issues are excluded.
         </p>
       </div>
 
@@ -59,50 +80,101 @@ export default async function DashboardPage({
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Opened" value={String(data.totalOpened)} />
         <Stat label="Closed" value={String(data.totalClosed)} />
-        <Stat
-          label="Median time to first reply"
-          value={formatDuration(data.medianFirstResponseSeconds) ?? "—"}
-          hint={
-            data.medianFirstResponseSeconds === null
-              ? "Nothing in range has a reply yet"
-              : undefined
-          }
-        />
-        <Stat
-          label="Median time to resolution"
-          value={formatDuration(data.medianResolutionSeconds) ?? "—"}
-          hint={
-            data.medianResolutionSeconds === null
-              ? "Nothing in range has been resolved yet"
-              : undefined
-          }
-        />
+        <Stat label="In Progress" value={String(inProgressCount)} />
+        <Stat label="Open Backlog" value={String(openBacklog)} />
       </dl>
 
-      <WeeklyChart points={data.weekly} />
+      <div className="grid gap-6 lg:grid-cols-5">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 lg:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Top Contributors
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Ranked by solved tasks and reward points
+              </p>
+            </div>
+            <Link
+              href="/leaderboard"
+              className="text-xs font-medium text-teal-700 hover:underline"
+            >
+              View all →
+            </Link>
+          </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <BreakdownCard
-          title="By status"
-          rows={data.byStatus.map((s) => ({
-            label: statusLabel[s.status as keyof typeof statusLabel] ?? s.status,
-            count: s.count,
-          }))}
-          total={statusTotal}
-        />
-        <BreakdownCard
-          title="By severity"
-          rows={data.bySeverity.map((s) => ({
-            label:
-              severityLabel[s.label as keyof typeof severityLabel] ?? s.label,
-            count: s.count,
-          }))}
-          total={statusTotal}
-        />
-        <BreakdownCard title="By platform" rows={data.byPlatform} total={statusTotal} />
+          {leaderboardRows.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              No contributions yet in this workspace. Resolve an issue to appear on the leaderboard.
+            </p>
+          ) : (
+            <ol className="mt-4 divide-y divide-slate-100">
+              {leaderboardRows.map((entry) => {
+                const isAgent = agentOwnerIds.has(entry.userId);
+                return (
+                  <li
+                    key={entry.userId}
+                    className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <span className="w-6 text-right text-xs font-semibold tabular-nums text-slate-500">
+                      #{entry.rank}
+                    </span>
+                    <Avatar name={entry.name} image={entry.image} />
+                    <div className="min-w-0 flex-1 truncate">
+                      <Link
+                        href={`/users/${entry.userId}`}
+                        className="truncate text-sm font-medium text-slate-900 hover:underline"
+                      >
+                        {entry.name}
+                      </Link>
+                      <div className="mt-0.5">
+                        <span
+                          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            isAgent
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-teal-100 text-teal-700"
+                          }`}
+                        >
+                          {isAgent ? "Agent" : "Contributor"}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-xs tabular-nums text-slate-600">
+                      {entry.solvedTasks} solved
+                    </span>
+                    <span className="w-16 text-right text-sm font-semibold tabular-nums text-slate-900">
+                      {entry.points} pts
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-2">
+          <BreakdownCard
+            title="By status"
+            rows={data.byStatus.map((s) => ({
+              label: statusLabel[s.status as keyof typeof statusLabel] ?? s.status,
+              count: s.count,
+            }))}
+            total={statusTotal}
+          />
+          <BreakdownCard
+            title="By severity"
+            rows={data.bySeverity.map((s) => ({
+              label:
+                severityLabel[s.label as keyof typeof severityLabel] ?? s.label,
+              count: s.count,
+            }))}
+            total={statusTotal}
+          />
+          <div className="sm:col-span-2">
+            <BreakdownCard title="By platform" rows={data.byPlatform} total={statusTotal} />
+          </div>
+        </div>
       </div>
-
-      <BreakdownCard title="By type" rows={data.byType} total={statusTotal} wide />
     </div>
   );
 }
@@ -189,121 +261,6 @@ function Stat({
   );
 }
 
-const WEEK_LABEL = (week: Date) =>
-  week.toISOString().slice(0, 10);
-
-function WeeklyChart({ points }: { points: WeekPoint[] }) {
-  const peak = Math.max(1, ...points.map((p) => Math.max(p.opened, p.closed)));
-  const width = Math.max(points.length * 28, 120);
-  const height = 140;
-
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Opened vs closed, by week
-      </h2>
-      <p className="mt-1 flex flex-wrap items-center gap-4 text-xs text-slate-600">
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-teal-700" />
-          Opened
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-slate-400" />
-          Closed
-        </span>
-      </p>
-
-      {points.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">No weeks in this range.</p>
-      ) : (
-        <>
-          <div className="mt-4 overflow-x-auto">
-            {/*
-              The chart is decorative: every number in it is in the table
-              below, which is the accessible version rather than a summary
-              of one. So it is hidden from assistive technology instead of
-              being given a label that cannot carry the data anyway.
-            */}
-            <svg
-              viewBox={`0 0 ${width} ${height}`}
-              width={width}
-              height={height}
-              role="presentation"
-              aria-hidden="true"
-              className="max-w-full"
-            >
-              {points.map((point, index) => {
-                const x = index * 28 + 4;
-                const openedH = Math.round((point.opened / peak) * (height - 24));
-                const closedH = Math.round((point.closed / peak) * (height - 24));
-                return (
-                  <g key={point.week.toISOString()}>
-                    <rect
-                      x={x}
-                      y={height - 16 - openedH}
-                      width={9}
-                      height={openedH}
-                      rx={1.5}
-                      className="fill-teal-700"
-                    />
-                    <rect
-                      x={x + 11}
-                      y={height - 16 - closedH}
-                      width={9}
-                      height={closedH}
-                      rx={1.5}
-                      className="fill-slate-400"
-                    />
-                  </g>
-                );
-              })}
-              <line
-                x1={0}
-                y1={height - 16}
-                x2={width}
-                y2={height - 16}
-                className="stroke-slate-200"
-                strokeWidth={1}
-              />
-            </svg>
-          </div>
-
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm font-medium text-teal-700 hover:underline">
-              Show the figures
-            </summary>
-            <div className="mt-2 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <caption className="sr-only">
-                  Issues opened and closed each week
-                </caption>
-                <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th scope="col" className="py-1.5 pr-4">Week beginning</th>
-                    <th scope="col" className="py-1.5 pr-4 text-right">Opened</th>
-                    <th scope="col" className="py-1.5 text-right">Closed</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {points.map((point) => (
-                    <tr key={point.week.toISOString()}>
-                      <th scope="row" className="py-1.5 pr-4 font-normal text-slate-700">
-                        {WEEK_LABEL(point.week)}
-                      </th>
-                      <td className="py-1.5 pr-4 text-right tabular-nums">{point.opened}</td>
-                      <td className="py-1.5 text-right tabular-nums">{point.closed}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
-        </>
-      )}
-    </section>
-  );
-}
-
 function BreakdownCard({
   title,
   rows,
@@ -338,8 +295,6 @@ function BreakdownCard({
                   {row.label}
                 </th>
                 <td className="w-full py-1 pr-3">
-                  {/* Width is a visual echo of the number beside it, so it
-                      carries no information of its own. */}
                   <span
                     aria-hidden="true"
                     className="block h-2 rounded-sm bg-teal-600/70"
