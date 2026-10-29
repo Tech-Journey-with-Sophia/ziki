@@ -7,9 +7,10 @@ type BrandLockupProps = {
   href?: string;
   size?: "sm" | "md";
   showWordmark?: boolean;
+  variant?: "light" | "dark";
 };
 
-/** Icon-only mark from zedu-fe `public/login_logo.svg` (mark path, no wordmark). */
+/** Distinctive platform mark: issue tracking and agent coordination built around the core Z mark. */
 const sizes = {
   sm: { px: 28, className: "h-7 w-7" },
   md: { px: 44, className: "h-11 w-11" },
@@ -19,8 +20,10 @@ export function BrandLockup({
   href,
   size = "sm",
   showWordmark = true,
+  variant = "light",
 }: BrandLockupProps) {
   const dim = sizes[size];
+  const textColor = variant === "dark" ? "text-white" : "text-slate-900";
   const content = (
     <>
       <Image
@@ -36,8 +39,8 @@ export function BrandLockup({
         <span
           className={
             size === "md"
-              ? "text-2xl font-semibold tracking-tight text-slate-900"
-              : "whitespace-nowrap text-lg font-semibold tracking-tight text-slate-900"
+              ? `text-2xl font-semibold tracking-tight ${textColor}`
+              : `whitespace-nowrap text-lg font-semibold tracking-tight ${textColor}`
           }
         >
           Ziki

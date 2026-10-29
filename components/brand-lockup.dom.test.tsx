@@ -22,4 +22,18 @@ describe("BrandLockup (#1063)", () => {
     const { container } = render(<BrandLockup />);
     expect(container.querySelector('[aria-label="Ziki"]')).toHaveTextContent(/^Ziki$/);
   });
+
+  it("renders dark variant with light text (#424)", () => {
+    const { container } = render(<BrandLockup variant="dark" />);
+    const textSpan = container.querySelector("span.text-white");
+    expect(textSpan).toBeInTheDocument();
+    expect(textSpan).toHaveTextContent(/^Ziki$/);
+  });
+
+  it("renders md hero size (#424)", () => {
+    const { container } = render(<BrandLockup size="md" />);
+    const textSpan = container.querySelector("span.text-2xl");
+    expect(textSpan).toBeInTheDocument();
+  });
 });
+
