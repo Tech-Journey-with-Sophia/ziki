@@ -15,7 +15,7 @@ import {
   type StepState,
   type Tone,
 } from "@/components/issue-progress-report";
-import { decisionStageInfo, stageOfDecision, type DecisionStage } from "@/lib/decision-stages";
+import { decisionStageInfo, decisionTone, stageOfDecision, type DecisionStage } from "@/lib/decision-stages";
 
 /** The state chip beside "<Stage> stage", as in the design. */
 const STATE_CHIP: Record<StepState, { label: string; tone: Tone }> = {
@@ -132,12 +132,15 @@ export function IssueStageSummary({
   setback = false,
   pullRequestUrl = null,
   severity = null,
+  voteCount,
 }: {
   decisions: ReadonlyArray<AgentDecision>;
   currentStage: DecisionStage;
   setback?: boolean;
   pullRequestUrl?: string | null;
   severity?: Severity | null;
+  /** The issue's upvotes, shown on the Idea stage, where they gate it. */
+  voteCount?: number;
 }) {
   const picked = useIssueStage();
   const stage = picked?.stage ?? currentStage;
@@ -161,6 +164,11 @@ export function IssueStageSummary({
     else tallies.set(card.label, { n: 1, tone: card.tone, icon: card.icon });
   }
   const latest = inStage[inStage.length - 1];
+  // The stage's totals in the card's corner: every agent decision up or down,
+  // zeros included, and on the Idea stage the upvotes that gate it.
+  const up = inStage.filter((decision) => decisionTone(decision) === "positive").length;
+  const down = inStage.length - up;
+  const showVotes = stage === "idea" && typeof voteCount === "number";
 
   return (
     <div key={stage} className="issue-progress ssum lg" aria-label={`${label} stage update`} role="group">
@@ -173,6 +181,23 @@ export function IssueStageSummary({
             {label} stage<span className={`chip ${chip.tone}`}>{chip.label}</span>
           </p>
           <p className="mb-0 mt-[3px] text-[13px] leading-[1.55] text-zk-text2">{text}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1 text-right" aria-label={`${label} stage totals`}>
+          <span className="inline-flex items-center gap-2 font-mono text-[13px] font-semibold tabular-nums">
+            <span className="text-zk-ok-fg" title={`${plural(up, "agent decision")} up`}>
+              <span aria-hidden="true">✓</span>
+              {up}
+              <span className="sr-only"> up</span>
+            </span>
+            <span className="text-zk-bad-fg" title={`${plural(down, "agent decision")} down`}>
+              <span aria-hidden="true">✕</span>
+              {down}
+              <span className="sr-only"> down</span>
+            </span>
+          </span>
+          {showVotes ? (
+            <span className="text-[12px] text-zk-muted">{plural(voteCount, "upvote")}</span>
+          ) : null}
         </div>
       </div>
       {tallies.size > 0 ? (

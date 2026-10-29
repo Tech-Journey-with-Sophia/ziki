@@ -61,7 +61,7 @@ function renderPage(
   list: AgentDecision[],
   stage: DecisionStage,
   threadComments = comments,
-  { setback = false, pullRequestUrl = null as string | null } = {},
+  { setback = false, pullRequestUrl = null as string | null, voteCount = undefined as number | undefined } = {},
 ) {
   const starts = stageStarts(list);
   const counts: Record<DecisionStage, number> = { idea: 0, open: 0, done: 0, ready: 0, live: 0 };
@@ -78,6 +78,7 @@ function renderPage(
         setback={setback}
         pullRequestUrl={pullRequestUrl}
         severity="medium"
+        voteCount={voteCount}
       />
       <StageCommentThread
         bugId="b1"
@@ -161,6 +162,28 @@ describe("IssueProgressReport (#1446)", () => {
 });
 
 describe("IssueStageSummary (#186)", () => {
+  it("shows the stage's up and down totals and, on the Idea stage, the upvotes", () => {
+    renderPage(decisions, "idea", comments, { voteCount: 6 });
+    const totals = within(screen.getByLabelText("Idea stage totals"));
+    expect(totals.getByTitle("1 agent decision up")).toHaveTextContent("1 up");
+    expect(totals.getByTitle("1 agent decision down")).toHaveTextContent("1 down");
+    expect(totals.getByText("6 upvotes")).toBeInTheDocument();
+
+    fireEvent.click(stageButton(/^Done/));
+    const done = within(screen.getByLabelText("Done stage totals"));
+    expect(done.getByTitle("1 agent decision up")).toBeInTheDocument();
+    expect(done.getByTitle("1 agent decision down")).toBeInTheDocument();
+    expect(done.queryByText(/upvote/)).toBeNull();
+  });
+
+  it("shows zero totals on a stage with no decisions yet", () => {
+    renderPage([], "idea", [], { voteCount: 0 });
+    const totals = within(screen.getByLabelText("Idea stage totals"));
+    expect(totals.getByTitle("0 agent decisions up")).toHaveTextContent("0 up");
+    expect(totals.getByTitle("0 agent decisions down")).toHaveTextContent("0 down");
+    expect(totals.getByText("0 upvotes")).toBeInTheDocument();
+  });
+
   it("marks each stage Complete, In progress or Not reached against the current one", () => {
     renderPage(decisions, "done");
     expect(summary("Done").getByText("In progress")).toBeInTheDocument();
