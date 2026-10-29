@@ -283,47 +283,6 @@ export default async function BugsPage({
   const { categoryId: _platformClause, ...platformTabWhere } = where;
   void _platformClause;
 
-  const stageView = isDeletedView ? null : parseIssueStageView(toSingleQueryParam(params.stage));
-  let stages = new Map<string, IssueStage>();
-  let allIdeaIds: string[] = [];
-  let reportedCount = 0;
-  let confirmedCount = 0;
-  let readyCount = 0;
-
-  if (!isDeletedView) {
-    try {
-      const { categoryId: _c, status: _s, ...allOpenWhere } = where;
-      void _c;
-      void _s;
-      stages = await openIssueStages(prisma, allOpenWhere);
-    } catch (error) {
-      console.error("[bugs] issue stage lookup failed", error);
-    }
-
-    reportedCount = [...stages.values()].filter((stage) => stage === "reported").length;
-    confirmedCount = [...stages.values()].filter((stage) => stage === "confirmed").length;
-    readyCount = [...stages.values()].filter((stage) => stage === "ready").length;
-    allIdeaIds = [...stages.entries()]
-      .filter(([, stage]) => stage === "reported" || stage === "confirmed")
-      .map(([id]) => id);
-
-    if (stageView === "ideas") {
-      where.id = { in: allIdeaIds };
-    } else if (stageView === "reported" || stageView === "confirmed" || stageView === "ready") {
-      const ids = [...stages.entries()].filter(([, stage]) => stage === stageView).map(([id]) => id);
-      where.id = { in: ids };
-    } else {
-      // #420: Ideas leave the main issues list and live only in the Ideas view.
-      if (allIdeaIds.length > 0) {
-        if (where.id && typeof where.id === "object" && "in" in where.id && Array.isArray((where.id as { in: string[] }).in)) {
-          (where.id as { in: string[] }).in = (where.id as { in: string[] }).in.filter((id) => !allIdeaIds.includes(id));
-        } else {
-          where.id = { notIn: allIdeaIds };
-        }
-      }
-    }
-  }
-
   let totalCount = 0;
   try {
     totalCount = await prisma.bug.count({ where });
@@ -347,6 +306,55 @@ export default async function BugsPage({
       );
     } else {
       return issuesQueryError(reference);
+    }
+  }
+
+  const stageView = isDeletedView ? null : parseIssueStageView(toSingleQueryParam(params.stage));
+  let stages = new Map<string, IssueStage>();
+  let allIdeaIds: string[] = [];
+  let reportedCount = 0;
+  let confirmedCount = 0;
+  let readyCount = 0;
+
+  if (!isDeletedView && totalCount > 0) {
+    try {
+      const { categoryId: _c, status: _s, ...allOpenWhere } = where;
+      void _c;
+      void _s;
+      stages = await openIssueStages(prisma, allOpenWhere);
+    } catch (error) {
+      console.error("[bugs] issue stage lookup failed", error);
+    }
+
+    reportedCount = [...stages.values()].filter((stage) => stage === "reported").length;
+    confirmedCount = [...stages.values()].filter((stage) => stage === "confirmed").length;
+    readyCount = [...stages.values()].filter((stage) => stage === "ready").length;
+    allIdeaIds = [...stages.entries()]
+      .filter(([, stage]) => stage === "reported" || stage === "confirmed")
+      .map(([id]) => id);
+
+    if (stageView === "ideas") {
+      where.id = { in: allIdeaIds };
+      totalCount = allIdeaIds.length;
+    } else if (stageView === "reported" || stageView === "confirmed" || stageView === "ready") {
+      const ids = [...stages.entries()].filter(([, stage]) => stage === stageView).map(([id]) => id);
+      where.id = { in: ids };
+      totalCount = ids.length;
+    } else {
+      // #420: Ideas leave the main issues list and live only in the Ideas view.
+      if (allIdeaIds.length > 0) {
+        if (where.id && typeof where.id === "object" && "in" in where.id && Array.isArray((where.id as { in: string[] }).in)) {
+          (where.id as { in: string[] }).in = (where.id as { in: string[] }).in.filter((id) => !allIdeaIds.includes(id));
+          totalCount = (where.id as { in: string[] }).in.length;
+        } else {
+          where.id = { notIn: allIdeaIds };
+          try {
+            totalCount = await prisma.bug.count({ where });
+          } catch {
+            totalCount = Math.max(0, totalCount - allIdeaIds.length);
+          }
+        }
+      }
     }
   }
 
