@@ -33,6 +33,7 @@ import {
 import { absoluteUrl } from "@/lib/site-url";
 import { SHARE_IMAGE } from "@/lib/share-image";
 import {
+  isRecentHeartbeat,
   severityClass,
   severityLabels,
   statusClass,
@@ -383,7 +384,7 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
     Boolean(bug.areaId && bid.agent.areaPreferences.length);
   const canAwardBid = bug.status === "open" && !bug.isDeleted && (bug.reporterId === user.id || canChooseRedesign);
 
-  const [users, categories, areas, types, voterSummary, activities, activityCount, comments, latestStatusChange, attachments, lastRevision, agentDecisions, escalations, volunteerCount, pendingApproval] =
+  const [users, categories, areas, types, voterSummary, activities, activityCount, comments, latestStatusChange, attachments, lastRevision, agentDecisions, escalations, volunteerCount, pendingApproval, activeClaim] =
     await Promise.all([
       canTriage
         ? loadOptional("users", [], () =>
@@ -560,6 +561,22 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
             })
           : Promise.resolve(null)),
       ),
+      loadOptional("active claim", null, () =>
+        prisma.issueClaim?.findFirst
+          ? prisma.issueClaim.findFirst({
+              where: { bugId: id, status: "active", releasedAt: null },
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                createdAt: true,
+                lastHeartbeatAt: true,
+                deliverBy: true,
+                agent: { select: { id: true, name: true, owner: { select: { name: true } } } },
+                beneficiary: { select: { id: true, name: true, image: true } },
+              },
+            })
+          : Promise.resolve(null),
+      ),
     ]);
   // #603: the tenant's active agents, offered in the comment @mention list
   // as "Mark's Claude · Mark Essien" alongside people.
@@ -628,6 +645,32 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
   const resolution = currentResolution(bug.status, latestStatusChange);
   const agentResolution =
     bug.status === "resolved" && !bug.isDeleted ? readAgentResolution(latestStatusChange?.metadata) : null;
+
+  const isHeartbeatLive = isRecentHeartbeat(activeClaim?.lastHeartbeatAt);
+
+  const activeWorker = activeClaim
+    ? {
+        name: activeClaim.agent.name,
+        beneficiaryName: activeClaim.beneficiary.name,
+        image: activeClaim.beneficiary.image,
+        isAgent: true,
+        isLive: isHeartbeatLive,
+        lastHeartbeatAt: activeClaim.lastHeartbeatAt,
+        deliverBy: activeClaim.deliverBy,
+        kind: "claim" as const,
+      }
+    : bug.assignee && bug.status === "in_progress"
+      ? {
+          name: bug.assignee.name,
+          beneficiaryName: null,
+          image: bug.assignee.image,
+          isAgent: false,
+          isLive: false,
+          lastHeartbeatAt: null,
+          deliverBy: null,
+          kind: "assignee" as const,
+        }
+      : null;
 
   // Workflow badges that are always visible: status and severity. Anything
   // else (boost, volunteers) is supplementary and folds into the mobile +N
@@ -839,9 +882,64 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
                     🗑️ Deleted
                   </span>
                 ) : null}
-                <Badge className={statusClass[bug.status]}>
+                <Badge
+                  data-testid="prominent-issue-status"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold uppercase tracking-wider shadow-2xs border ${statusClass[bug.status]} ${
+                    bug.status === "in_progress" ? "ring-2 ring-violet-400/40" : ""
+                  }`}
+                >
+                  {bug.status === "open" && <span className="h-2 w-2 rounded-full bg-sky-500 shrink-0" />}
+                  {bug.status === "in_progress" && (
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-600" />
+                    </span>
+                  )}
+                  {bug.status === "resolved" && (
+                    <svg className="size-3.5 text-emerald-700 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {bug.status === "closed" && (
+                    <svg className="size-3.5 text-zinc-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                    </svg>
+                  )}
                   {statusLabels[bug.status]}
                 </Badge>
+                {activeWorker ? (
+                  <span
+                    data-testid="active-working-badge"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-teal-300 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-950 shadow-2xs"
+                  >
+                    {activeWorker.isLive ? (
+                      <span className="relative flex h-2 w-2 shrink-0" title="Live heartbeat active">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                    ) : (
+                      <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-slate-400" title="Heartbeat paused" />
+                    )}
+                    <span>Actively Working:</span>
+                    <span className="font-bold text-teal-900">{activeWorker.name}</span>
+                    {activeWorker.beneficiaryName ? (
+                      <span className="text-teal-700 text-[11px] font-normal">({activeWorker.beneficiaryName})</span>
+                    ) : null}
+                    {activeWorker.isLive ? (
+                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800">
+                        LIVE
+                      </span>
+                    ) : null}
+                  </span>
+                ) : bug.status === "open" && !bug.isDeleted ? (
+                  <span
+                    data-testid="idle-working-badge"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+                    Idle · Available
+                  </span>
+                ) : null}
                 <Badge className={severityClass[bug.severity]}>
                   {severityLabels[bug.severity]}
                 </Badge>

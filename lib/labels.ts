@@ -36,3 +36,9 @@ export const authorBadgeClass = "bg-teal-100 text-teal-950";
 
 /** Platform category badge style (#366). */
 export const categoryBadgeClass = "border border-teal-200 bg-teal-50 text-teal-950";
+
+/** Checks if a heartbeat occurred within the given window (default 15m) (#449). */
+export function isRecentHeartbeat(date: Date | null | undefined, windowMs = 15 * 60 * 1000): boolean {
+  if (!date) return false;
+  return Date.now() - new Date(date).getTime() < windowMs;
+}

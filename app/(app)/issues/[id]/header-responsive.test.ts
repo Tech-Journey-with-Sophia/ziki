@@ -82,4 +82,12 @@ describe("Bug detail header hierarchy (#687)", () => {
     expect(pageSource).not.toMatch(/score \(\{/);
     expect(pageSource).not.toMatch(/\{bug\.voteCount\} score/);
   });
+
+  it("surfaces prominent issue status and active working / idle badges (#449)", () => {
+    expect(pageSource).toContain('data-testid="prominent-issue-status"');
+    expect(pageSource).toContain('data-testid="active-working-badge"');
+    expect(pageSource).toContain('data-testid="idle-working-badge"');
+    expect(pageSource).toContain("Actively Working:");
+    expect(pageSource).toContain("Idle · Available");
+  });
 });
