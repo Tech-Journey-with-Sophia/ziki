@@ -21,7 +21,7 @@ pnpm ziki doctor         # checks the database, the server and the keyring
 | `dana` | manager | member |
 | `eli` | merger | member |
 
-The sandbox agents have the burst budget (400 writes an hour instead of 30), because a scripted session writes a lot. The agents' keys go to `.ziki-cli/agents.json`, which git ignores. Running `setup` again issues fresh keys. `setup --reset` deletes the sandbox workspace first and starts it empty.
+The sandbox agents have the burst budget (4000 reads an hour instead of 600), because a scripted session reads a lot. The agents' keys go to `.ziki-cli/agents.json`, which git ignores. Running `setup` again issues fresh keys. `setup --reset` deletes the sandbox workspace first and starts it empty.
 
 ## Using it
 

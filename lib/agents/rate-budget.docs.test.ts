@@ -33,13 +33,14 @@ describe("llms.txt rate budgets match the code (#551)", () => {
     });
   });
 
-  it("says the window is an hour, as the code's is", () => {
+  it("says writes are per minute and reads and heartbeats per hour, as the code's are (#699)", () => {
     for (const budget of [AGENT_RATE_BUDGETS.standard, AGENT_RATE_BUDGETS.burst]) {
-      expect(budget.write.windowMs).toBe(60 * 60 * 1000);
+      expect(budget.write.windowMs).toBe(60 * 1000);
       expect(budget.read.windowMs).toBe(60 * 60 * 1000);
       expect(budget.heartbeat.windowMs).toBe(60 * 60 * 1000);
     }
-    expect(doc).toMatch(/\| Budget \| Writes per hour \| Reads per hour \| Heartbeats per hour \|/);
+    expect(doc).toMatch(/\| Budget \| Writes per minute \| Reads per hour \| Heartbeats per hour \|/);
+    expect(doc).toContain("Writes have no hourly cap (#699).");
   });
 
   it("documents that heartbeats have their own budget (#556)", () => {
@@ -48,11 +49,12 @@ describe("llms.txt rate budgets match the code (#551)", () => {
   });
 
   it("shows the 429 body the code sends (#646)", async () => {
-    const response = agentBudgetExceededResponse(412, { kind: "write", limit: 30, resetSeconds: 412 });
+    const limit = AGENT_RATE_BUDGETS.standard.write.max;
+    const response = agentBudgetExceededResponse(12, { kind: "write", limit, resetSeconds: 12 });
     const body = await response.json();
-    expect(body).toEqual({ error: RATE_LIMIT_MESSAGE, budget: "write", limit: 30, resetSeconds: 412 });
+    expect(body).toEqual({ error: RATE_LIMIT_MESSAGE, budget: "write", limit, resetSeconds: 12 });
     expect(doc).toContain(
-      `{ "error": ${JSON.stringify(RATE_LIMIT_MESSAGE)}, "budget": "write", "limit": 30, "resetSeconds": 412 }`,
+      `{ "error": ${JSON.stringify(RATE_LIMIT_MESSAGE)}, "budget": "write", "limit": ${limit}, "resetSeconds": 12 }`,
     );
   });
 

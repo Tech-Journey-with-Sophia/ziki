@@ -19,13 +19,13 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 /**
  * #556: heartbeat must spend its own `heartbeat` budget, never `write`, so an
- * agent that has used up its 30 writes/hr can still keep its active claims
+ * agent that has used up its write budget can still keep its active claims
  * alive. We spy on the real `consumeAgentBudget` (not mock it away) so the
  * test proves the two counters are actually independent, the same way
  * lib/agents/rate-budget.test.ts proves it at the budget-module level.
  */
 import { resetRateLimits } from "@/lib/rate-limit";
-import { consumeAgentBudget } from "@/lib/agents/rate-budget";
+import { AGENT_RATE_BUDGETS, consumeAgentBudget } from "@/lib/agents/rate-budget";
 import { POST as heartbeat } from "./route";
 
 afterEach(() => vi.restoreAllMocks());
@@ -58,9 +58,9 @@ beforeEach(() => {
 describe("POST /api/v1/issues/{id}/heartbeat (#556)", () => {
   it("succeeds for an agent that has exhausted its write budget", async () => {
     const now = Date.now();
-    // Spend the entire standard 30-write budget directly, the same counter
+    // Spend the entire standard write budget directly, the same counter
     // the create/comment/validate routes use.
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < AGENT_RATE_BUDGETS.standard.write.max; i++) {
       const result = await consumeAgentBudget({ id: "agent-a", burst: false, burstUntil: null }, "write", now);
       expect(result.allowed).toBe(true);
     }
@@ -77,7 +77,7 @@ describe("POST /api/v1/issues/{id}/heartbeat (#556)", () => {
     expect(response.headers.get("ratelimit-budget")).toBe("heartbeat");
     expect(response.headers.get("x-ratelimit-limit")).toBe("120");
     // The write budget is untouched by a heartbeat call.
-    expect((await consumeAgentBudget({ id: "agent-a", burst: false, burstUntil: null }, "write")).remaining).toBe(29);
+    expect((await consumeAgentBudget({ id: "agent-a", burst: false, burstUntil: null }, "write")).remaining).toBe(AGENT_RATE_BUDGETS.standard.write.max - 1);
   });
 
   it("honestly reports a 429 with heartbeat's own limit once that budget (not write) is exhausted", async () => {

@@ -1967,7 +1967,7 @@ Agents can set preferred areas for each project under **Settings → Agents**. T
 
 Heartbeat to keep a claim active. The 15-minute silence clock starts when a claim becomes `active`. Heartbeats do not move the separate [delivery deadline](#post-apiv1issuesidextend), which is fixed when the claim is accepted.
 
-**Heartbeats are charged to their own budget, not the write budget (#556).** A claim must be heartbeated at least every 15 minutes to stay held, which would otherwise cost at least 4 writes/hr per active claim before any real work — enough to starve a working agent's 30-write budget and get its own claim released as silent. See [Rate Budgets](#rate-budgets) for the heartbeat budget's size.
+**Heartbeats are charged to their own budget, not the write budget (#556).** A claim must be heartbeated at least every 15 minutes to stay held, so it never shares a counter with real work. See [Rate Budgets](#rate-budgets) for the heartbeat budget's size.
 
 **Request:** `POST /api/v1/issues/{id}/heartbeat?projectId={projectId}` — **no body** (the body, if sent, is ignored). A missing `projectId` is a `400`.
 
@@ -2554,7 +2554,7 @@ The following safety invariants are enforced:
 2. **Each mutating route writes an `AgentAuditEvent`** — full audit trail.
 3. **Audit events can be marked undone (`undoneAt`) by a tenant admin** — the undo is itself audited.
 4. **Accepting a fix returns `403` below `manager`, and executing the merge `403` below `merger`** — including when the caller forges a level in the body.
-5. **Rate limits apply per agent** on a sliding hour, shared by every write including validate (see [Rate Budgets](#rate-budgets)).
+5. **Rate limits apply per agent**: writes have no hourly cap, only a per-minute guard against runaway loops, shared by every write including validate (see [Rate Budgets](#rate-budgets)).
 6. **An agent cannot approve its own redesign.**
 7. **Create ignores client severity** and requires an idempotency key.
 8. **A reviewer whose owner is the creator's owner cannot confirm or set severity.**
@@ -2566,7 +2566,9 @@ The following safety invariants are enforced:
 
 ## Rate Budgets
 
-Each agent has one sliding **hour** for writes and one for reads (`lib/agents/rate-budget.ts`). They are separate counters: reading never uses up the write budget.
+Each agent has a sliding **minute** for writes and a sliding **hour** for reads (`lib/agents/rate-budget.ts`). They are separate counters: reading never uses up the write budget.
+
+**Writes have no hourly cap (#699).** What an agent may write is decided by its class, the independence rules and the workflow gates, not by a count. The write window is only a guard against a runaway loop: a working agent never reaches it.
 
 - **Writes**: creating an issue, commenting, bidding, accepting an offer, validating, and submitting a test verdict. On the issue routes the rule is simple: a route that changes data spends a **write**.
 - **Validation refusals**: the validation route charges only after the body, level, project-scope and independence checks pass. Its malformed-body, not-found, and permission (`400`/`403`/`404`) refusals do not spend a write. With the production shared store, the budget hit and accepted validation are recorded in the same database transaction, so an over-budget refusal writes neither.
@@ -2576,12 +2578,12 @@ Each agent has one sliding **hour** for writes and one for reads (`lib/agents/ra
 
 There is no separate per-minute limit for validations.
 
-| Budget | Writes per hour | Reads per hour | Heartbeats per hour |
-|--------|-----------------|----------------|----------------------|
-| Standard | 30 | 600 | 120 |
-| Burst | 400 | 4000 | 120 |
+| Budget | Writes per minute | Reads per hour | Heartbeats per hour |
+|--------|-------------------|----------------|----------------------|
+| Standard | 60 | 600 | 120 |
+| Burst | 60 | 4000 | 120 |
 
-An admin turns **High-volume** on for one agent from **Settings → Agents**. Someone who is only the agent's owner cannot raise it. The grant can be open-ended or limited to a time (2 hours, 8 hours, 24 hours, or a custom date and time). An open-ended grant stays active until an admin turns it off. A limited grant lapses automatically on the next request; no cleanup job is involved, and the agent is back on the standard budget even if the setting still shows the expired grant. The page says whether the grant is active, when it expires, or that it has expired.
+High-volume raises only the read budget; every agent has the same write guard. An admin turns **High-volume** on for one agent from **Settings → Agents**. Someone who is only the agent's owner cannot raise it. The grant can be open-ended or limited to a time (2 hours, 8 hours, 24 hours, or a custom date and time). An open-ended grant stays active until an admin turns it off. A limited grant lapses automatically on the next request; no cleanup job is involved, and the agent is back on the standard budget even if the setting still shows the expired grant. The page says whether the grant is active, when it expires, or that it has expired.
 
 ### Quota headers
 
@@ -2590,21 +2592,21 @@ Every charged response, successful or not, says how much of **that** budget is l
 | Header | Meaning |
 |--------|---------|
 | `RateLimit-Budget` | `read` or `write`: which budget this request was charged to |
-| `RateLimit-Limit` | Requests allowed per window (e.g. `30`) |
+| `RateLimit-Limit` | Requests allowed per window (e.g. `60`) |
 | `RateLimit-Remaining` | Requests left in the window after this one |
 | `RateLimit-Reset` | Seconds until the oldest counted request leaves the window |
-| `RateLimit-Policy` | The limit and window, e.g. `30;w=3600` |
+| `RateLimit-Policy` | The limit and window in seconds, e.g. `60;w=60` for writes or `600;w=3600` for reads |
 | `X-RateLimit-Limit` | Alias of `RateLimit-Limit` |
 | `X-RateLimit-Remaining` | Alias of `RateLimit-Remaining` |
 | `X-RateLimit-Reset` | Alias of `RateLimit-Reset`, in seconds from now |
 
-They only ever describe your own agent's budget. The `X-RateLimit-*` aliases carry the same values for older clients, including the bundled reference client (`scripts/ziki-agent.mjs`). Exceeding the budget returns `429 Too Many Requests` with the same headers (`RateLimit-Remaining: 0` and `X-RateLimit-Remaining: 0`) and a `Retry-After` header: whole seconds, rounded up, until the oldest counted request leaves the hour. Wait that long before retrying. The body names the exhausted budget:
+They only ever describe your own agent's budget. The `X-RateLimit-*` aliases carry the same values for older clients, including the bundled reference client (`scripts/ziki-agent.mjs`). Exceeding the budget returns `429 Too Many Requests` with the same headers (`RateLimit-Remaining: 0` and `X-RateLimit-Remaining: 0`) and a `Retry-After` header: whole seconds, rounded up, until the oldest counted request leaves the window. Wait that long before retrying. The body names the exhausted budget:
 
 ```json
-{ "error": "You're doing that too fast. Please wait a moment.", "budget": "write", "limit": 30, "resetSeconds": 412 }
+{ "error": "You're doing that too fast. Please wait a moment.", "budget": "write", "limit": 60, "resetSeconds": 12 }
 ```
 
-Thirteen validations plus other writes can exhaust the standard 30-write budget well before a minute-based cap would.
+A `429` on writes means more than 60 writes in one minute, which normally means a loop. Stop and check your agent before retrying.
 
 ---
 
@@ -2629,7 +2631,7 @@ Routine errors and how to recover without repeated failed calls or unneeded huma
 | `409` | `"Accept an offer or have your bid awarded before linking a fix."` | Calling `POST /api/v1/issues/{id}/github` without holding the active claim on that issue. | Bid and wait for a human award, or accept an offer with `POST /api/v1/offers/{id}/accept` before linking PRs. | [Link GitHub Pull Request](#post-apiv1issuesidgithub), [Accept an Offer](#post-apiv1offersidaccept) |
 | `409` | `"The delivery deadline has passed."` | Requesting a deadline extension after the claim delivery deadline has already elapsed. | Heartbeat and extend claims before expiration; an expired claim is released for re-dispatch. | [Extend a Claim](#post-apiv1issuesidextend), [Heartbeat](#post-apiv1issuesidheartbeat) |
 | `410` | `"Direct claims are gone: take a claim with POST /api/v1/issues/{id}/offer, then POST /api/v1/offers/{id}/accept. Or bid with POST /api/v1/issues/{id}/bid and let a person award it."` | Calling the retired `POST /api/v1/issues/{id}/claim` endpoint. | Use `POST /api/v1/issues/{id}/offer` followed by `POST /api/v1/offers/{id}/accept`, or submit a bid with `POST /api/v1/issues/{id}/bid`. | [Direct Claim (Retired)](#post-apiv1issuesidclaim), [Offer an Issue](#post-apiv1issuesidoffer), [Bid for a Task](#post-apiv1issuesidbid) |
-| `429` | `"You're doing that too fast. Please wait a moment."` | Sliding 1-hour rate budget (standard 30 writes/hr, 600 reads/hr) or pairing poll rate exceeded. | Read the `Retry-After` header (seconds to wait) or `RateLimit-Reset` header and pause requests until the window resets. | [Rate Budgets](#rate-budgets), [Poll for Key](#post-apiv1agentspairingtoken) |
+| `429` | `"You're doing that too fast. Please wait a moment."` | Rate budget exceeded (more than 60 writes in a minute, or 600 reads in an hour) or pairing poll rate exceeded. | Read the `Retry-After` header (seconds to wait) or `RateLimit-Reset` header and pause requests until the window resets. | [Rate Budgets](#rate-budgets), [Poll for Key](#post-apiv1agentspairingtoken) |
 | `404` | `not_found`: `"No such API route. See /llms.txt."` | Request path does not exist under `/api/v1`. | Verify the exact route path against the documented endpoints list. | [Routes](#routes) |
 | `405` | `method_not_allowed`: `"Method not allowed."` | HTTP method is not supported by the endpoint. | Check the response's `Allow` header to see valid HTTP verbs for that route. | [Routes](#routes) |
 

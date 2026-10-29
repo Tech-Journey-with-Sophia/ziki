@@ -10,7 +10,8 @@ import {
   withAgentBudgetHeaders,
 } from "./rate-budget";
 
-const HOUR = 60 * 60 * 1000;
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
 const standard = { id: "agent-standard", burst: false };
 const burst = { id: "agent-burst", burst: true };
 
@@ -33,16 +34,16 @@ describe("agent rate budgets (#440)", () => {
   });
 
   it("matches the budgets in the issue", () => {
-    expect(AGENT_RATE_BUDGETS.standard.write).toEqual({ max: 30, windowMs: HOUR });
+    expect(AGENT_RATE_BUDGETS.standard.write).toEqual({ max: 60, windowMs: MINUTE });
     expect(AGENT_RATE_BUDGETS.standard.read).toEqual({ max: 600, windowMs: HOUR });
     expect(AGENT_RATE_BUDGETS.standard.heartbeat).toEqual({ max: 120, windowMs: HOUR });
-    expect(AGENT_RATE_BUDGETS.burst.write).toEqual({ max: 400, windowMs: HOUR });
+    expect(AGENT_RATE_BUDGETS.burst.write).toEqual({ max: 60, windowMs: MINUTE });
     expect(AGENT_RATE_BUDGETS.burst.read).toEqual({ max: 4000, windowMs: HOUR });
     expect(AGENT_RATE_BUDGETS.burst.heartbeat).toEqual({ max: 120, windowMs: HOUR });
   });
 
   it("heartbeat (#556) has its own counter: exhausting writes doesn't block it, and it has its own cap", async () => {
-    await spend(standard, "write", 30, 0);
+    await spend(standard, "write", 60, 0);
     expect((await consumeAgentBudget(standard, "write", 100)).allowed).toBe(false);
     // A write-exhausted agent can still heartbeat its active claims.
     expect((await consumeAgentBudget(standard, "heartbeat", 100)).allowed).toBe(true);
@@ -53,36 +54,37 @@ describe("agent rate budgets (#440)", () => {
     expect((await consumeAgentBudget(standard, "read", 202)).allowed).toBe(true);
   });
 
-  it("rejects a standard key at the 31st write in an hour", async () => {
-    await spend(standard, "write", 30, 0);
-    const result = await consumeAgentBudget(standard, "write", 1000);
-    expect(result.allowed).toBe(false);
+  it("has no hourly write cap (#699): 1000 writes spread over an hour all pass", async () => {
+    for (let i = 0; i < 1000; i++) {
+      const result = await consumeAgentBudget(standard, "write", i * 3_600);
+      if (!result.allowed) throw new Error(`rejected at write ${i + 1}`);
+    }
+  });
+
+  it("stops a runaway loop at the 61st write within a minute", async () => {
+    await spend(standard, "write", 60, 0);
+    expect((await consumeAgentBudget(standard, "write", 1000)).allowed).toBe(false);
   });
 
   it("treats a missing burst flag as standard", async () => {
     const agent = { id: "agent-no-flag" };
-    for (let i = 0; i < 30; i++) await consumeAgentBudget(agent, "write", i);
-    expect((await consumeAgentBudget(agent, "write", 100)).allowed).toBe(false);
+    for (let i = 0; i < 600; i++) await consumeAgentBudget(agent, "read", i);
+    expect((await consumeAgentBudget(agent, "read", 1000)).allowed).toBe(false);
   });
 
-  it("still has room for a burst key at 300 creates in an hour", async () => {
-    await spend(burst, "write", 300, 0);
-    expect((await consumeAgentBudget(burst, "write", 1000)).allowed).toBe(true);
-  });
-
-  it("rejects a burst key past 400 writes", async () => {
-    await spend(burst, "write", 400, 0);
+  it("gives a burst key the same write guard as everyone", async () => {
+    await spend(burst, "write", 60, 0);
     expect((await consumeAgentBudget(burst, "write", 1000)).allowed).toBe(false);
   });
 
   it("does not share a counter between reads and writes", async () => {
-    await spend(standard, "write", 30, 0);
+    await spend(standard, "write", 60, 0);
     expect((await consumeAgentBudget(standard, "write", 100)).allowed).toBe(false);
     expect((await consumeAgentBudget(standard, "read", 100)).allowed).toBe(true);
   });
 
   it("does not share a counter between agents", async () => {
-    await spend(standard, "write", 30, 0);
+    await spend(standard, "write", 60, 0);
     expect((await consumeAgentBudget({ id: "other", burst: false }, "write", 100)).allowed).toBe(true);
   });
 
@@ -91,14 +93,14 @@ describe("agent rate budgets (#440)", () => {
     expect((await consumeAgentBudget(standard, "read", 1000)).allowed).toBe(false);
   });
 
-  it("allows writes again once the hour has passed", async () => {
-    await spend(standard, "write", 30, 0);
-    expect((await consumeAgentBudget(standard, "write", HOUR + 1)).allowed).toBe(true);
+  it("allows writes again once the minute has passed", async () => {
+    await spend(standard, "write", 60, 0);
+    expect((await consumeAgentBudget(standard, "write", MINUTE + 60)).allowed).toBe(true);
   });
 
   it("says how long to wait, in whole seconds", async () => {
-    await spend(standard, "write", 30, 0);
-    const result = await consumeAgentBudget(standard, "write", HOUR - 1500);
+    await spend(standard, "write", 60, 0);
+    const result = await consumeAgentBudget(standard, "write", MINUTE - 1500);
     expect(result).toMatchObject({ allowed: false, retryAfterSeconds: 2 });
   });
 
@@ -130,37 +132,37 @@ describe("high-volume expiry (#596)", () => {
 
   it("falls back to standard for a malformed expiry", () => {
     expect(burstActive({ burst: true, burstUntil: "not-a-date" }, 10)).toBe(false);
-    expect(agentBudget({ id: "a", burst: true, burstUntil: "not-a-date" }, "write", 10)).toEqual({
-      max: 30,
+    expect(agentBudget({ id: "a", burst: true, burstUntil: "not-a-date" }, "read", 10)).toEqual({
+      max: 600,
       windowMs: HOUR,
     });
   });
 
   it("uses the burst budget for an unexpired grant", async () => {
     const agent = { id: "agent-future", burst: true, burstUntil: new Date(HOUR * 2) };
-    expect(await consumeAgentBudget(agent, "write", 0)).toMatchObject({
+    expect(await consumeAgentBudget(agent, "read", 0)).toMatchObject({
       allowed: true,
-      limit: 400,
-      remaining: 399,
+      limit: 4000,
+      remaining: 3999,
     });
-    await spend(agent, "write", 299, 1);
-    expect((await consumeAgentBudget(agent, "write", 1_000)).allowed).toBe(true);
+    await spend(agent, "read", 799, 1);
+    expect((await consumeAgentBudget(agent, "read", 1_000)).allowed).toBe(true);
   });
 
   it("uses the standard budget as soon as the grant expires", async () => {
     const expiresAt = 1_000;
     const agent = { id: "agent-expiring", burst: true, burstUntil: new Date(expiresAt) };
-    await spend(agent, "write", 300, 0);
-    const afterExpiry = await consumeAgentBudget(agent, "write", expiresAt);
-    expect(afterExpiry).toMatchObject({ allowed: false, limit: 30, remaining: 0 });
-    expect((await consumeAgentBudget(agent, "write", expiresAt + 1)).allowed).toBe(false);
+    await spend(agent, "read", 700, 0);
+    const afterExpiry = await consumeAgentBudget(agent, "read", expiresAt);
+    expect(afterExpiry).toMatchObject({ allowed: false, limit: 600, remaining: 0 });
+    expect((await consumeAgentBudget(agent, "read", expiresAt + 1)).allowed).toBe(false);
   });
 
   it("keeps an indefinite grant on until it is disabled", async () => {
     const agent = { id: "agent-indefinite", burst: true, burstUntil: null };
-    expect(await consumeAgentBudget(agent, "write", 0)).toMatchObject({ limit: 400 });
-    expect(await consumeAgentBudget(agent, "write", 10 * HOUR)).toMatchObject({ limit: 400 });
-    expect(await consumeAgentBudget({ ...agent, burst: false }, "write", 10 * HOUR)).toMatchObject({ limit: 30 });
+    expect(await consumeAgentBudget(agent, "read", 0)).toMatchObject({ limit: 4000 });
+    expect(await consumeAgentBudget(agent, "read", 10 * HOUR)).toMatchObject({ limit: 4000 });
+    expect(await consumeAgentBudget({ ...agent, burst: false }, "read", 10 * HOUR)).toMatchObject({ limit: 600 });
   });
 });
 
@@ -171,11 +173,11 @@ describe("agent rate-limit quota headers (#646)", () => {
 
   it("reports the budget, what's left and when it resets on every charge", async () => {
     const first = await consumeAgentBudget(standard, "write", 0);
-    expect(first).toMatchObject({ allowed: true, kind: "write", limit: 30, windowSeconds: 3600, remaining: 29, resetSeconds: 3600 });
+    expect(first).toMatchObject({ allowed: true, kind: "write", limit: 60, windowSeconds: 60, remaining: 59, resetSeconds: 60 });
     await spend(standard, "write", 9, 1000);
-    const tenth = await consumeAgentBudget(standard, "write", 20 * 60 * 1000);
-    // The first charge leaves the window at 3600 s, 40 minutes on.
-    expect(tenth).toMatchObject({ remaining: 19, resetSeconds: 40 * 60 });
+    const tenth = await consumeAgentBudget(standard, "write", 20 * 1000);
+    // The first charge leaves the window at 60 s, 40 seconds on.
+    expect(tenth).toMatchObject({ remaining: 49, resetSeconds: 40 });
   });
 
   it("keeps reads and writes apart", async () => {
@@ -184,27 +186,27 @@ describe("agent rate-limit quota headers (#646)", () => {
   });
 
   it("uses the burst limits for a burst agent", async () => {
-    expect(await consumeAgentBudget(burst, "write", 0)).toMatchObject({ limit: 400, remaining: 399 });
+    expect(await consumeAgentBudget(burst, "read", 0)).toMatchObject({ limit: 4000, remaining: 3999 });
   });
 
   it("names the exhausted budget and when it resets in a 429", async () => {
-    await spend(standard, "write", 30, 0);
-    const result = await consumeAgentBudget(standard, "write", HOUR - 1500);
+    await spend(standard, "write", 60, 0);
+    const result = await consumeAgentBudget(standard, "write", MINUTE - 1500);
     if (result.allowed) throw new Error("expected a refusal");
     const response = agentBudgetExceededResponse(result.retryAfterSeconds, result);
     expect(response.status).toBe(429);
     expect(Object.fromEntries(["Retry-After", "RateLimit-Budget", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "RateLimit-Policy", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"].map((h) => [h, response.headers.get(h)]))).toEqual({
       "Retry-After": "2",
       "RateLimit-Budget": "write",
-      "RateLimit-Limit": "30",
+      "RateLimit-Limit": "60",
       "RateLimit-Remaining": "0",
       "RateLimit-Reset": "2",
-      "RateLimit-Policy": "30;w=3600",
-      "X-RateLimit-Limit": "30",
+      "RateLimit-Policy": "60;w=60",
+      "X-RateLimit-Limit": "60",
       "X-RateLimit-Remaining": "0",
       "X-RateLimit-Reset": "2",
     });
-    expect(await response.json()).toMatchObject({ budget: "write", limit: 30, resetSeconds: 2 });
+    expect(await response.json()).toMatchObject({ budget: "write", limit: 60, resetSeconds: 2 });
   });
 
   it("adds headers to a successful response without inventing fields it doesn't know", async () => {

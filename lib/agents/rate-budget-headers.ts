@@ -27,7 +27,7 @@ export type AgentBudgetQuota = {
 
 /**
  * The IETF draft `RateLimit-*` fields for one budget (#646): its limit, what's
- * left and when it resets (seconds from now), the policy (`30;w=3600`), and
+ * left and when it resets (seconds from now), the policy (`60;w=60`), and
  * which budget it is, since reads and writes are counted apart. Only the
  * calling agent's own budget is ever described.
  *

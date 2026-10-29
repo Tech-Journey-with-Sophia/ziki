@@ -192,10 +192,10 @@ export function AgentControls({
         }
         toast(
           !next
-            ? `${agentName} is back to 30 writes an hour.`
+            ? `${agentName} is back to 600 reads an hour.`
             : until
               ? `${agentName} has the high-volume budget until ${new Date(until).toLocaleString()}.`
-              : `${agentName} can now make 400 writes an hour, with no expiry.`,
+              : `${agentName} can now make 4000 reads an hour, with no expiry.`,
           "success",
         );
       } else {
@@ -319,15 +319,15 @@ export function AgentControls({
       {canSetBurst || burstOn ? (
         <p className="text-xs text-zk-muted" suppressHydrationWarning>
           {!burstOn ? (
-            "Standard budget: 30 writes an hour."
+            "Standard budget: 600 reads an hour."
           ) : burstExpired ? (
-            "High-volume expired; standard budget: 30 writes an hour."
+            "High-volume expired; standard budget: 600 reads an hour."
           ) : savedUntil ? (
             <>
-              High-volume until <LocalTime date={savedUntil} /> (400 writes an hour).
+              High-volume until <LocalTime date={savedUntil} /> (4000 reads an hour).
             </>
           ) : (
-            "High-volume active with no expiry (400 writes an hour)."
+            "High-volume active with no expiry (4000 reads an hour)."
           )}
         </p>
       ) : null}

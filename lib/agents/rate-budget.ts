@@ -11,26 +11,33 @@ export { agentBudgetHeaders, withAgentBudgetHeaders, type AgentBudgetQuota } fro
 /**
  * Per-agent read and write budgets (#440).
  *
- * Each agent has two sliding one-hour windows in the shared rate-limit store
+ * Each agent has sliding windows in the shared rate-limit store
  * (`RateLimitHit`, #296): `agent:{id}:write` and `agent:{id}:read`, so reads
  * never use up the write budget. A tenant admin can turn on `Agent.burst` for
- * an agent that files a lot of genuine findings.
+ * an agent that reads a lot.
+ *
+ * Writes have no hourly cap (#699). Permissions, independence and workflow
+ * gates decide what an agent may write; the write window is only a short
+ * guard that stops a runaway loop, and a working agent never reaches it.
  */
 
-const HOUR = 60 * 60 * 1000;
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+
+/** The anti-runaway guard on writes (#699): the same for every agent. */
+const WRITE_GUARD = { max: 60, windowMs: MINUTE } as const;
 
 /**
  * What a request costs: writes change the board, reads only look at it.
  * `heartbeat` is its own small budget (#556) — a claim must be heartbeated
- * at least every 15 minutes just to stay held, so charging that to the
- * same 30/hr write budget as real work can starve an agent that is
- * otherwise idle, releasing its claim as silent even while it's working.
+ * at least every 15 minutes just to stay held, so it never shares a
+ * counter with real work.
  */
 export type AgentBudgetKind = "read" | "write" | "heartbeat";
 
 export const AGENT_RATE_BUDGETS = {
   standard: {
-    write: { max: 30, windowMs: HOUR },
+    write: WRITE_GUARD,
     read: { max: 600, windowMs: HOUR },
     // Up to 2 concurrent claims (the default active-claims cap) heartbeated
     // every 5 minutes is 24/hr; 120 leaves generous headroom without being
@@ -38,7 +45,7 @@ export const AGENT_RATE_BUDGETS = {
     heartbeat: { max: 120, windowMs: HOUR },
   },
   burst: {
-    write: { max: 400, windowMs: HOUR },
+    write: WRITE_GUARD,
     read: { max: 4000, windowMs: HOUR },
     heartbeat: { max: 120, windowMs: HOUR },
   },

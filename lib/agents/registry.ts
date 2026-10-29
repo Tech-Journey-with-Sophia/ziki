@@ -329,7 +329,7 @@ export async function setAgentAreaPreferences(
 }
 
 /**
- * Turns the higher write budget on or off (#440), optionally until a time
+ * Turns the higher read budget on or off (#440; writes have no hourly cap since #699), optionally until a time
  * (#596). A workspace admin or a site admin may do this. An owner who is not
  * an admin cannot.
  *
@@ -348,7 +348,7 @@ export async function setAgentBurst(
   const managed = await managedAgent(actor, agentId);
   if (!managed) return { ok: false, error: NOT_FOUND };
   if (!managed.isTenantAdmin && !isAdmin(actor.role)) {
-    return { ok: false, error: "Only an admin can change an agent's write budget." };
+    return { ok: false, error: "Only an admin can change an agent's read budget." };
   }
   if (managed.agent.revokedAt) return { ok: false, error: "That agent is revoked." };
 
@@ -386,7 +386,7 @@ export async function setAgentBurst(
   } catch {
     // The transaction rolled back, so the old budget still applies. Never
     // report success when the change was not persisted.
-    return { ok: false, error: "Couldn't change the write budget. Try again." };
+    return { ok: false, error: "Couldn't change the read budget. Try again." };
   }
   return { ok: true };
 }

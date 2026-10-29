@@ -63,13 +63,13 @@ describe("setAgentBurstAction (#596)", () => {
   });
 
   it("does not revalidate when the caller is not an admin", async () => {
-    setAgentBurst.mockResolvedValue({ ok: false, error: "Only an admin can change an agent's write budget." });
+    setAgentBurst.mockResolvedValue({ ok: false, error: "Only an admin can change an agent's read budget." });
     expect(await setAgentBurstAction("agent1", true)).toMatchObject({ ok: false });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("does not report success when persistence fails", async () => {
-    setAgentBurst.mockResolvedValue({ ok: false, error: "Couldn't change the write budget. Try again." });
+    setAgentBurst.mockResolvedValue({ ok: false, error: "Couldn't change the read budget. Try again." });
     expect(await setAgentBurstAction("agent1", true)).toMatchObject({ ok: false });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
