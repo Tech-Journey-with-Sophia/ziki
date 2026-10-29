@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authorizationToken, hashSecret } from "@/lib/agents/keys";
 import { AgentLevelError } from "@/lib/agents/levels";
+import { AgentScopeError } from "@/lib/agents/permissions";
 import { AgentPlatformDisabledError, agentPlatformDisabledResponse } from "@/lib/agents/platform-gate";
 import { isAgentPlatformEnabled } from "@/lib/feature-flags";
 import { logger } from "@/lib/logger";
@@ -23,6 +24,8 @@ export type AgentContext = {
   ownerId: string;
   tenantId: string;
   level: AgentLevel;
+  /** Granular permission scopes (#462). */
+  scopes?: readonly string[];
   /** For the rate budget (#440). */
   burst: boolean;
   /** When the higher budget lapses; null means no expiry (#596). */
@@ -156,8 +159,8 @@ export async function requireAgent(request: HeaderSource): Promise<AgentContext>
 }
 
 /**
- * The response for a failed `requireAgent()` or `requireLevel()`: 401 for a
- * missing or bad key, 403 for too low a level. Anything else is rethrown.
+ * The response for a failed `requireAgent()`, `requireLevel()`, or `requireScope()`:
+ * 401 for a missing or bad key, 403 for too low a level or missing scope. Anything else is rethrown.
  */
 export function agentErrorResponse(error: unknown): NextResponse {
   if (error instanceof AgentPlatformDisabledError) return agentPlatformDisabledResponse();
@@ -173,6 +176,12 @@ export function agentErrorResponse(error: unknown): NextResponse {
   if (error instanceof AgentLevelError) {
     return NextResponse.json(
       { error: "insufficient_level", message: error.message, required: error.required },
+      { status: 403 },
+    );
+  }
+  if (error instanceof AgentScopeError) {
+    return NextResponse.json(
+      { error: error.code, message: error.message, requiredScope: error.requiredScope },
       { status: 403 },
     );
   }
