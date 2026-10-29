@@ -38,7 +38,7 @@ describe("ActivityTimeline collapsed by default (#418)", () => {
   });
 
   it("expands through the header and exposes the unchanged timeline", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(
       <ActivityTimeline activities={[entry({ actor: { name: "Bob" } })]} totalCount={1} />,
     );

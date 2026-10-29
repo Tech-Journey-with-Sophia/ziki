@@ -82,7 +82,7 @@ describe("CreateBugForm optimistic submission", () => {
     mockedCreateBug.mockReset();
     mockedCreateBug.mockResolvedValue({ ok: true });
     mockedRethrow.mockClear();
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
   });
 
   it("submits the form and enables the button once the action resolves", async () => {
@@ -327,7 +327,7 @@ describe("CreateBugForm project-scoped drafts (#729)", () => {
     });
     mockedCreateBug.mockReset();
     mockedCreateBug.mockResolvedValue({ ok: true });
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
   });
 
   afterEach(() => {
@@ -424,7 +424,7 @@ describe("CreateBugForm quick report in a modal (#report-modal)", () => {
     mockedCreateBug.mockResolvedValue({ ok: true });
     capturedFormData = null;
     window.localStorage.clear();
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
   });
 
   function renderModal(extra: Partial<Parameters<typeof CreateBugForm>[0]> = {}) {

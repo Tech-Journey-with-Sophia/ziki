@@ -28,7 +28,7 @@ describe("VoteButton interactive optimistic updates (#219)", () => {
       userVote: 1,
     });
 
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(
       <VoteButton
         bugId="bug-1"
@@ -57,7 +57,7 @@ describe("VoteButton interactive optimistic updates (#219)", () => {
       error: "You cannot vote on your own issue.",
     });
 
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(
       <VoteButton
         bugId="bug-1"
@@ -87,7 +87,7 @@ describe("VoteButton interactive optimistic updates (#219)", () => {
       userVote: 1,
     });
 
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(
       <VoteButton
         bugId="bug-1"
@@ -114,7 +114,7 @@ describe("VoteButton interactive optimistic updates (#219)", () => {
       error: "You cannot vote on your own issue.",
     });
 
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(
       <VoteButton
         bugId="bug-1"

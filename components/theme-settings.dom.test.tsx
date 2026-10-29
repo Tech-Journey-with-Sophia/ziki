@@ -23,7 +23,7 @@ describe("ThemeSettings save feedback (#646)", () => {
 
   it("shows a failed save as an alert and reverts the choice", async () => {
     mockSave.mockResolvedValueOnce({ error: "Could not save theme to your account." });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ThemeSettings initialTheme="light" />);
 
     await user.click(screen.getByRole("radio", { name: /Dark/ }));
@@ -41,7 +41,7 @@ describe("ThemeSettings save feedback (#646)", () => {
     mockSave
       .mockResolvedValueOnce({ error: "Could not save theme to your account." })
       .mockResolvedValueOnce({ ok: true });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ThemeSettings initialTheme="light" />);
     const dark = screen.getByRole("radio", { name: /Dark/ });
 

@@ -28,7 +28,7 @@ describe("DocsPage", () => {
 
   it("renders key API sections and interactive cURL examples", async () => {
     const copySpy = vi.mocked(clipboard.copyText).mockResolvedValue(true);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<DocsPage />);
 

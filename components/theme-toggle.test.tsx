@@ -72,7 +72,7 @@ describe("ThemeToggle (#659)", () => {
 
   it("toggles to dark mode when currently light", async () => {
     document.documentElement.setAttribute("data-theme", "light");
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ThemeToggle />);
 
     const button = screen.getByTestId("theme-toggle");
@@ -87,7 +87,7 @@ describe("ThemeToggle (#659)", () => {
 
   it("toggles to light mode when currently dark", async () => {
     document.documentElement.setAttribute("data-theme", "dark");
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ThemeToggle />);
 
     const button = screen.getByTestId("theme-toggle");
@@ -103,7 +103,7 @@ describe("ThemeToggle (#659)", () => {
   it("rolls back theme on server action failure", async () => {
     document.documentElement.setAttribute("data-theme", "light");
     mockSetThemeAction.mockResolvedValueOnce({ error: "Failed to save" });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ThemeToggle />);
 
     const button = screen.getByTestId("theme-toggle");
@@ -127,7 +127,7 @@ describe("AccountThemeSelector (#659)", () => {
   });
 
   it("selects a theme on button click", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<AccountThemeSelector />);
 
     await user.click(screen.getByRole("button", { name: "Dark" }));

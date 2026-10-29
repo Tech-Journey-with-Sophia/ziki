@@ -21,7 +21,7 @@ describe("MarkdownEditor Write/Preview switcher semantics (#652)", () => {
   });
 
   it("announces the current view with aria-pressed and flips it on activation", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderEditor();
     const write = screen.getByRole("button", { name: "Write" });
     const preview = screen.getByRole("button", { name: /Preview/ });
@@ -37,7 +37,7 @@ describe("MarkdownEditor Write/Preview switcher semantics (#652)", () => {
   });
 
   it("toggles from the keyboard with Space and Enter, and keeps focus on the pressed button", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderEditor();
     const write = screen.getByRole("button", { name: "Write" });
     const preview = screen.getByRole("button", { name: /Preview/ });

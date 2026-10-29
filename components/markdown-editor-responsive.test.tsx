@@ -74,7 +74,7 @@ describe("MarkdownEditor responsive toolbar on 360px phones (#696)", () => {
   });
 
   it("supports keyboard Tab navigation through all toolbar tools", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(
       <MarkdownEditor
         value="Hello world"
@@ -157,7 +157,7 @@ describe("MarkdownEditor responsive toolbar on 360px phones (#696)", () => {
 
   it("applies formatting correctly when toolbar buttons are clicked", async () => {
     let text = "Selected text";
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(
       <MarkdownEditor
         value={text}

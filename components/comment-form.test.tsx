@@ -60,7 +60,7 @@ describe("CommentForm optimistic update and rollback", () => {
     mockToast.mockReset();
     mockedAddComment.mockReset();
     mockedAddComment.mockResolvedValue({ ok: true });
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
   });
 
   it("posts a comment, clears the form, and calls onSuccess", async () => {

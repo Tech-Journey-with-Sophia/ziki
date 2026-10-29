@@ -22,7 +22,7 @@ function renderForm() {
   render(
     <AgentSettingsForm agentId="agent_1" name="Pixel" level="manager" levels={["working"]} />,
   );
-  return userEvent.setup();
+  return userEvent.setup({ delay: null });
 }
 
 describe("AgentSettingsForm", () => {

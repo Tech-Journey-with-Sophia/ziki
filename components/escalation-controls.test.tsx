@@ -35,7 +35,7 @@ describe("EscalationTypeBadge (#763)", () => {
 
 describe("QuickResolveButtons (#763)", () => {
   it("triggers quick resolve action with approve", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const mockAction = vi.mocked(quickResolveEscalationAction);
     mockAction.mockResolvedValue({ ok: true });
 
@@ -48,7 +48,7 @@ describe("QuickResolveButtons (#763)", () => {
   });
 
   it("triggers quick resolve action with authorize", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const mockAction = vi.mocked(quickResolveEscalationAction);
     mockAction.mockResolvedValue({ ok: true });
 
@@ -63,7 +63,7 @@ describe("QuickResolveButtons (#763)", () => {
 
 describe("QuickResolveButtons refused action (Ziki #538)", () => {
   it("shows the server's error as an alert and does not report it resolved", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onResolved = vi.fn();
     vi.mocked(quickResolveEscalationAction).mockResolvedValue({
       ok: false,
@@ -81,7 +81,7 @@ describe("QuickResolveButtons refused action (Ziki #538)", () => {
   });
 
   it("clears the error when a retry succeeds", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onResolved = vi.fn();
     vi.mocked(quickResolveEscalationAction)
       .mockResolvedValueOnce({ ok: false, error: "You can't answer this escalation." })

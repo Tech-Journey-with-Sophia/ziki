@@ -28,7 +28,7 @@ afterEach(() => cleanup());
 
 describe("TwoFactorSettings (#648)", () => {
   it("walks setup: password, scan and confirm, then shows the backup codes once", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     actions.startTwoFactorAction.mockResolvedValue({ ok: true, secret: "JBSWY3DPEHPK3PXP", qr: "data:image/png;base64,AAAA" });
     actions.confirmTwoFactorAction.mockResolvedValue({ ok: true, codes: ["AAAAA-BBBBB", "CCCCC-DDDDD"] });
     render(<TwoFactorSettings enabled={false} backupCodesLeft={0} />);
@@ -53,7 +53,7 @@ describe("TwoFactorSettings (#648)", () => {
   });
 
   it("shows the reason when the password or code is wrong and stays on the step", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     actions.startTwoFactorAction.mockResolvedValue({ ok: false, error: "That password isn't right." });
     render(<TwoFactorSettings enabled={false} backupCodesLeft={0} />);
     await user.click(screen.getByRole("button", { name: "Set up two-factor sign-in" }));
@@ -64,7 +64,7 @@ describe("TwoFactorSettings (#648)", () => {
   });
 
   it("when on, shows the backup codes left and asks for password and code to turn off", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     actions.disableTwoFactorAction.mockResolvedValue({ ok: true });
     render(<TwoFactorSettings enabled backupCodesLeft={1} />);
 
@@ -84,7 +84,7 @@ describe("TwoFactorSettings (#648)", () => {
   });
 
   it("makes new backup codes after re-authentication and shows them", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     actions.regenerateBackupCodesAction.mockResolvedValue({ ok: true, codes: ["XXXXX-YYYYY"] });
     render(<TwoFactorSettings enabled backupCodesLeft={5} />);
     await user.click(screen.getByRole("button", { name: "Make new backup codes" }));
@@ -96,7 +96,7 @@ describe("TwoFactorSettings (#648)", () => {
   });
 
   it("drops the signed-out notice when the next change fails or is cancelled", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     actions.regenerateBackupCodesAction
       .mockResolvedValueOnce({ ok: true, codes: ["XXXXX-YYYYY"] })
       .mockResolvedValueOnce({ ok: false, error: "That code isn't right." });
@@ -121,7 +121,7 @@ describe("TwoFactorSettings (#648)", () => {
   });
 
   it("explains when copying backup codes fails and keeps them available", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     copyTextMock.mockResolvedValueOnce(false);
     actions.regenerateBackupCodesAction.mockResolvedValue({ ok: true, codes: ["XXXXX-YYYYY"] });
     render(<TwoFactorSettings enabled backupCodesLeft={5} />);
@@ -138,7 +138,7 @@ describe("TwoFactorSettings (#648)", () => {
   });
 
   it("can be cancelled without calling anything", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<TwoFactorSettings enabled backupCodesLeft={5} />);
     await user.click(screen.getByRole("button", { name: "Turn off" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));

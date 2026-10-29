@@ -14,7 +14,7 @@ afterEach(() => cleanup());
 
 describe("MarkAllReadButton", () => {
   it("shows an error and keeps the button available when the action rejects", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     markAllRead.mockRejectedValueOnce(new Error("database unavailable"));
     render(<MarkAllReadButton />);
 

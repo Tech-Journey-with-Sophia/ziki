@@ -26,7 +26,7 @@ describe("LoginForm second step (#648)", () => {
   });
 
   it("asks for the code after the password is accepted, then sends it with the sign-in", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     login.mockResolvedValueOnce({ error: "Enter the code from your authenticator app.", needsCode: true });
     render(<LoginForm />);
     await fillAndSubmit(user);
@@ -47,7 +47,7 @@ describe("LoginForm second step (#648)", () => {
   });
 
   it("goes back to the plain form if the email or password is changed and fails", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     login.mockResolvedValueOnce({ error: "Enter the code from your authenticator app.", needsCode: true });
     render(<LoginForm />);
     await fillAndSubmit(user);
@@ -63,7 +63,7 @@ describe("LoginForm second step (#648)", () => {
 
 describe("LoginForm Google sign-in (#457)", () => {
   it("sends the requested page as the callback", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<LoginForm callbackUrl="/issues/ZE-12?comment=c9" googleEnabled />);
     await user.click(screen.getByRole("button", { name: "Continue with Google" }));
     await waitFor(() => expect(googleSignInAction).toHaveBeenCalledWith("/issues/ZE-12?comment=c9"));

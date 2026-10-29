@@ -50,7 +50,7 @@ describe("UserSearch", () => {
   });
 
   it("pushes the trimmed query as the q parameter on submit", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderUserSearch();
 
     await user.type(searchInput(), "  linux crash  ");
@@ -63,7 +63,7 @@ describe("UserSearch", () => {
 
   it("drops the q parameter when the submitted query is blank", async () => {
     searchParamsRef.current = new URLSearchParams("page=2");
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderUserSearch();
 
     await user.type(searchInput(), "   ");
@@ -76,7 +76,7 @@ describe("UserSearch", () => {
 
   it("clears the input and removes the q parameter", async () => {
     searchParamsRef.current = new URLSearchParams("q=crash");
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderUserSearch();
 
     await user.click(screen.getByRole("button", { name: "Clear search" }));

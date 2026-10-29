@@ -33,7 +33,7 @@ describe("AuditLog (#447)", () => {
   });
 
   it("reveals the payload for that row only", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<AuditLog rows={[row({}), row({ id: "event-2", payload: { body: "secret-payload-2" } })]} />);
 
     await user.click(screen.getAllByRole("button", { name: "Show more" })[0]);
@@ -44,7 +44,7 @@ describe("AuditLog (#447)", () => {
   });
 
   it("collapses again on Show less", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<AuditLog rows={[row({})]} />);
     await user.click(screen.getByRole("button", { name: "Show more" }));
     await user.click(screen.getByRole("button", { name: "Show less" }));
@@ -52,7 +52,7 @@ describe("AuditLog (#447)", () => {
   });
 
   it("opens from the keyboard without navigating", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<AuditLog rows={[row({})]} />);
     await user.tab(); // the issue link
     await user.tab(); // the Show more button
@@ -72,7 +72,7 @@ describe("AuditLog (#447)", () => {
   });
 
   it("shows the server's message when the undo is refused", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onUndo = vi.fn().mockResolvedValue({
       ok: false,
       error: "You can't undo an action performed by your own agent.",

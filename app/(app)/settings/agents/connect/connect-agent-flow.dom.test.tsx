@@ -41,7 +41,7 @@ beforeEach(() => {
   vi.mocked(checkAgentConnectedAction).mockResolvedValue({ connected: false });
 });
 
-async function reachCopyStep(user = userEvent.setup()) {
+async function reachCopyStep(user = userEvent.setup({ delay: null })) {
   render(<ConnectAgentFlow projectId="proj_1" />);
   await user.click(screen.getByRole("button", { name: "Connect agent" }));
   await user.type(screen.getByLabelText("Agent name"), "Claude");
@@ -76,7 +76,7 @@ describe("ConnectAgentFlow", () => {
 
   it("shows the registry's error and stays on the name step", async () => {
     vi.mocked(startAgentConnectAction).mockResolvedValue({ ok: false, error: "You already have 5 active agents." });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ConnectAgentFlow projectId="proj_1" />);
     await user.click(screen.getByRole("button", { name: "Connect agent" }));
     await user.type(screen.getByLabelText("Agent name"), "Claude");

@@ -47,7 +47,7 @@ beforeEach(() => {
 
 describe("notification preview (#615)", () => {
   it("toggles without navigation and preserves the tooltip and unread label", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader({ unreadCount: 3 });
     const bell = screen.getByRole("button", { name: "Notifications, 3 unread" });
     const location = window.location.href;
@@ -69,7 +69,7 @@ describe("notification preview (#615)", () => {
       { id: "n2", title: "New comment", createdAt: new Date("2026-10-21T12:00:00Z"), readAt: new Date() },
     ]);
     renderHeader();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Notifications" }));
+    await userEvent.setup({ delay: null }).click(screen.getByRole("button", { name: "Notifications" }));
     const link = await screen.findByRole("link", { name: /Unread: Issue assigned to you/ });
     expect(link.getAttribute("href")).toBe(`${BASE_PATH}/notifications/n1`);
     expect(link.querySelector("time")?.dateTime).toBe("2026-10-22T12:00:00.000Z");
@@ -78,7 +78,7 @@ describe("notification preview (#615)", () => {
   });
 
   it("supports keyboard opening, Escape focus restoration and outside dismissal", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
     const bell = screen.getByRole("button", { name: "Notifications" });
     bell.focus();
@@ -95,7 +95,7 @@ describe("notification preview (#615)", () => {
   it("shows loading and allows retry after failure", async () => {
     let reject!: (error: Error) => void;
     vi.mocked(recentNotificationsAction).mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
     await user.click(screen.getByRole("button", { name: "Notifications" }));
     expect(screen.getByRole("status").textContent).toBe("Loading notifications...");
@@ -106,7 +106,7 @@ describe("notification preview (#615)", () => {
   });
 
   it("lets Tab leave the preview and clears it when the workspace changes", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     // The bell is the last control in the bar, so Tab leaves the preview for
     // the page content after the header, as on a real page.
     const view = render(
@@ -135,7 +135,7 @@ describe("notification preview (#615)", () => {
   it("ignores an obsolete request after closing and reopening", async () => {
     let resolve!: (items: Awaited<ReturnType<typeof recentNotificationsAction>>) => void;
     vi.mocked(recentNotificationsAction).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
     const bell = screen.getByRole("button", { name: "Notifications" });
     await user.click(bell);
@@ -177,7 +177,7 @@ describe("account menu role switch", () => {
   });
 
   it("leaves View as out of the account menu", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
 
     await user.click(screen.getByRole("button", { name: /account menu/i }));
@@ -200,7 +200,7 @@ describe("account menu role switch", () => {
   });
 
   it("opens each agent in the Agents menu on that agent's own page", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader({
       agents: [
         { id: "agent_1", name: "Pixel", level: "working" },
@@ -215,7 +215,7 @@ describe("account menu role switch", () => {
   });
 
   it("sends Manage agents and Create agent to separate pages", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
     await user.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.getByRole("link", { name: "Manage agents" }).getAttribute("href")).toBe("/agents");
@@ -223,7 +223,7 @@ describe("account menu role switch", () => {
   });
 
   it("closes the Agents menu when a destination is chosen", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
     await user.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.getByRole("button", { name: "Agents" }).getAttribute("aria-expanded")).toBe("true");
@@ -232,7 +232,7 @@ describe("account menu role switch", () => {
   });
 
   it("lists Escalations in the account menu, with the pending count (#763)", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader({ pendingEscalationsCount: 5 });
     expect(screen.queryByRole("link", { name: /escalation/i })).toBeNull();
     await user.click(screen.getByRole("button", { name: /account menu/i }));
@@ -279,7 +279,7 @@ describe("account menu role switch", () => {
   });
 
   it("switches the active workspace as soon as one is chosen", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader({
       workspaces: [
         { id: "t1", name: "Ziki", slug: "ziki" },
@@ -303,7 +303,7 @@ describe("account menu role switch", () => {
   });
 
   it("shows the slug when two workspaces share a name", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader({
       workspaces: [
         { id: "t1", name: "Acme", slug: "acme" },
@@ -319,7 +319,7 @@ describe("account menu role switch", () => {
   });
 
   it("orders the account menu: Profile first, Documentation, no Dashboard or Switch workspace (#625)", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader({ userId: "ada", points: 128 });
 
     await user.click(screen.getByRole("button", { name: /account menu/i }));
@@ -338,7 +338,7 @@ describe("account menu role switch", () => {
 
 describe("theme preference (#659)", () => {
   it("renders the theme options in the account menu", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderHeader();
 
     await user.click(screen.getByRole("button", { name: /account menu/i }));
@@ -353,7 +353,7 @@ describe("Profile account navigation (#576)", () => {
   it("links to Activity & Approvals and marks it current", async () => {
     navigation.pathname = "/activity";
     renderHeader();
-    await userEvent.setup().click(screen.getByRole("button", { name: /account menu/i }));
+    await userEvent.setup({ delay: null }).click(screen.getByRole("button", { name: /account menu/i }));
     const activity = screen.getByRole("link", { name: "Activity & Approvals" });
     expect(activity.getAttribute("href")).toBe("/activity");
     expect(activity.getAttribute("aria-current")).toBe("page");
@@ -365,7 +365,7 @@ describe("Profile account navigation (#576)", () => {
     ["/settings/security", "Settings"],
   ])("marks only %s current in both account menus", async (pathname, currentLabel) => {
     navigation.pathname = pathname;
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = renderHeader();
 
     for (const [buttonName, panelId] of [[/account menu/i, "account-menu"]] as const) {

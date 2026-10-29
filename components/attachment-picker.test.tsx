@@ -11,7 +11,7 @@ describe("AttachmentPicker (#734)", () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
   });
 
   afterEach(() => {

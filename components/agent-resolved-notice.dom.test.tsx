@@ -24,7 +24,7 @@ describe("AgentResolvedNotice (Ziki #515)", () => {
   });
 
   it("reopens in one click and refreshes the page", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mocks.reopen.mockResolvedValue({ ok: true });
     render(<AgentResolvedNotice bugId="bug1" resolution={resolution} canReopen />);
     await user.click(screen.getByRole("button", { name: "Reopen" }));
@@ -33,7 +33,7 @@ describe("AgentResolvedNotice (Ziki #515)", () => {
   });
 
   it("shows why a reopen failed", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mocks.reopen.mockResolvedValue({ error: "Only the assignee can do that." });
     render(<AgentResolvedNotice bugId="bug1" resolution={resolution} canReopen />);
     await user.click(screen.getByRole("button", { name: "Reopen" }));

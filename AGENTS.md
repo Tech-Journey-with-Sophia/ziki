@@ -82,6 +82,17 @@ All agents watch their project's work feed, `GET /<project-slug>/work`, about ev
 ## Testing (required before done)
 
 - Run `pnpm test` and fix failures before claiming a task complete.
+
+### Fast local loop: set up once, don't re-run everything
+
+Every `vitest` start pays about 5 s of fixed start-up on Windows before a single test runs, and the full suite pays per-file setup about 500 times (about 65 s). Iterate without repeating that:
+
+- **Reuse one checkout.** Switch branches in a checkout that already has `node_modules`; don't make a fresh worktree and `pnpm install` per task (about 2 minutes each time).
+- **Keep one warm test process.** Run `pnpm test:watch` (optionally with the test files you're working on) and leave it running. It reruns only the affected tests about 1 s after you save, instead of about 5 s for a cold run.
+- **Or run just the test files you touched:** `pnpm vitest run lib/voting.test.ts lib/agent-api/votes.test.ts`. Avoid `vitest related` for a quick check: it scans every test file's imports first and is slower than naming the files.
+- **`pnpm test:changed`** runs the tests affected by everything changed since `origin/main`, as a pre-push check.
+- **`pnpm lint` is cached** (`node_modules/.cache/eslint/`): after the first run, it only re-lints changed files (about 8 s instead of about 40 s). `tsc` is already incremental.
+- Run the full `pnpm test` **once**, at the end, before you call the change done.
 - Use Node 22 as required by `package.json`. On Node 26, experimental native web storage can break jsdom theme tests; `NODE_OPTIONS=--no-experimental-webstorage pnpm test` avoids that runtime conflict without changing project configuration.
 - Validation schemas live in `lib/validations/bug.ts`; unit tests cover happy + invalid cases under `lib/validations/`.
 - Prefer Vitest for pure logic; do not invent heavy E2E unless asked.
