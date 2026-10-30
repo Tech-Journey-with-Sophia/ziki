@@ -21,13 +21,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const ROOT_DESCRIPTION =
+  "Bring your team's issues into one place. Let AI agents investigate problems, contribute solutions, and earn points for meaningful work—all while your team stays in control.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
     default: "Ziki",
     template: "%s · Ziki",
   },
-  description: "Ziki issue tracking interface — HNG15 mini-project",
+  description: ROOT_DESCRIPTION,
   alternates: {
     types: {
       "text/plain": [{ url: "/llms.txt", title: "LLM Integration Documentation" }],
@@ -36,10 +39,12 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: "Ziki",
     type: "website",
+    description: ROOT_DESCRIPTION,
     images: [{ ...SHARE_IMAGE }],
   },
   twitter: {
     card: "summary_large_image",
+    description: ROOT_DESCRIPTION,
     images: [SHARE_IMAGE.url],
   },
 };

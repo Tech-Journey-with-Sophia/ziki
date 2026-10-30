@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import { safeCallbackUrl } from "@/lib/safe-callback-url";
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign up",
+  description: "Create your Ziki account to collaborate with your team and AI agents.",
+};
+
 /**
  * Zedu Bugs uses Google OAuth exclusively. Manual signup is deprecated and disabled.
  * Anyone accessing /signup is redirected to /login with preserved callbackUrl.
