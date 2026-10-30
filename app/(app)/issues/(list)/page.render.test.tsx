@@ -257,6 +257,20 @@ describe("issue list layout", () => {
     expect(html).toContain('href="/ideas/12"');
   });
 
+  it("splits reported ideas: New ideas excludes drafts and adjusts its badge (#700)", async () => {
+    ideaFindMany.mockImplementation(async (args: { where: { createdByAgentId?: null; id?: { in?: string[]; notIn?: string[] } } }) =>
+      args.where.createdByAgentId === null && !args.where.id
+        ? [
+            { id: "idea-1", description: "Make the export faster", createdByAgentId: null },
+            { id: "idea-2", description: "## Summary\nx\n\n## Acceptance Criteria\n- y", createdByAgentId: null },
+          ]
+        : [IDEA]);
+    ideaCount.mockResolvedValue(2);
+    const html = await renderList({ status: "ideas" });
+    expect(ideaFindMany.mock.calls.at(-1)![0].where.id).toEqual({ notIn: ["idea-1"] });
+    expect(html).toMatch(/New ideas<span class="sr-only">, 1<\/span>/);
+  });
+
   it("shows an issue's importance as a plain number in the Importance column, not a button", async () => {
     findMany.mockResolvedValue([{ ...BUG, projectId: "project-acme" }]);
     const html = await renderList({ status: "all" });

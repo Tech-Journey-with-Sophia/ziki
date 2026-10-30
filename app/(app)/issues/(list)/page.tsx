@@ -82,7 +82,7 @@ import { logLoadFailure } from "@/lib/load-error";
 import { AREA_PARAM, parseProjectAreaFilter, projectAreaFilterWhere } from "@/lib/project-area-filter";
 import { openIssueConfirmations, parseIssueStageView, type IssueStage } from "@/lib/issue-stage";
 import { issuePath } from "@/lib/issue-ref";
-import { PROJECT_ALL_PARAM, showsAllProjects } from "@/lib/issue-list-filters";
+import { PROJECT_ALL_PARAM, showsAllProjects } from "@/lib/issue-list-filters";
 import { CountBadge } from "@/components/count-badge";
 
 /* Distinct browser-tab title; the root layout appends "· Ziki". */
@@ -581,7 +581,7 @@ export default async function BugsPage({
   // Rejected ideas (#idea-rejected), with the same scope and search as new ones.
   const rejectedIdeaWhere: Prisma.IdeaWhereInput = { ...ideaWhere, status: "rejected" };
   // The Ideas tab's counts show on every tab; drafts only while Ideas is open.
-  const [ideasCount, rejectedIdeasCount, draftIds] = await Promise.all([
+  const [totalIdeasCount, rejectedIdeasCount, draftIds] = await Promise.all([
     tenantId && !isDeletedView ? loadOrEmpty("ideas tab", () => prisma.idea.count({ where: ideaWhere }), 0) : 0,
     tenantId && !isDeletedView ? loadOrEmpty("rejected ideas tab", () => prisma.idea.count({ where: rejectedIdeaWhere }), 0) : 0,
     tenantId && isIdeasView
@@ -595,10 +595,18 @@ export default async function BugsPage({
         )
       : ([] as string[]),
   ]);
+  const ideasCount = Math.max(0, totalIdeasCount - (qParam?.trim() ? 0 : draftIds.length));
   const ideaRows: IdeaListRow[] = isIdeasView && tenantId
     ? await loadOrEmpty("ideas list", async () => {
         const rows = await prisma.idea.findMany({
-          where: ideasView === "drafts" ? { ...ideaWhere, id: { in: draftIds } } : ideasView === "rejected" ? rejectedIdeaWhere : ideaWhere,
+          where:
+            ideasView === "drafts"
+              ? { ...ideaWhere, id: { in: draftIds } }
+              : ideasView === "rejected"
+                ? rejectedIdeaWhere
+                : !qParam?.trim() && draftIds.length > 0
+                  ? { ...ideaWhere, id: { notIn: draftIds } }
+                  : ideaWhere,
           orderBy: [{ score: "desc" }, { createdAt: "desc" }, { id: "desc" }],
           take: IDEAS_LIMIT,
           select: {
