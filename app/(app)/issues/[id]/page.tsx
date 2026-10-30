@@ -56,6 +56,8 @@ import { testVerdictEntries } from "@/lib/agent-api/test-verdict";
 import { deliveryEntries } from "@/lib/agent-api/delivery";
 import { mergeReviewEntries } from "@/lib/agent-api/merge";
 import { DeliveriesPanel, MergeReviewsPanel, TestVerdictsPanel, type DeliveryView, type MergeReviewView, type TestVerdictView } from "@/components/issue-review-entries";
+import { PullRequestLineFeedback } from "@/components/pull-request-line-feedback";
+import { isLineFeedbackBody, loadLineFeedbackThreads, type LineFeedbackThread } from "@/lib/pull-request-line-feedback";
 import { Badge } from "@/components/ui/badge";
 import { VoteButton } from "@/components/vote-button";
 import { IssueConfirmationsPanel, type ConfirmationBlock, type ConfirmationsData } from "@/components/issue-confirmations";
@@ -708,7 +710,8 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
     Array.isArray(bug.votes) && bug.votes.length > 0
       ? voteDirection(bug.votes[0].value ?? 1)
       : 0;
-  const commentTree = buildCommentTree(comments.comments);
+  const generalComments = comments.comments.filter((c) => !isLineFeedbackBody(c.body));
+  const commentTree = buildCommentTree(generalComments);
   // #1446: the stage the page opens on, and what each stage holds.
   const currentStage = currentDecisionStage({ status: bug.status });
   // Sent back: the latest manager decision on the fix was a reject.
@@ -727,13 +730,14 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
   // Deliveries take replies while the work is being made or judged; they fold once it is past Delivered.
   const delivering = currentStage === "progress" || currentStage === "delivered";
   // Taken at their own stage; read-only afterwards.
-  const [deliveryList, testVerdictList, mergeReviewList] = pastConfirmation
+  const [deliveryList, testVerdictList, mergeReviewList, lineFeedbackThreads] = pastConfirmation
     ? await Promise.all([
         loadOptional<DeliveryView[]>("deliveries", [], () => deliveryEntries(reviewBug)),
         loadOptional<TestVerdictView[]>("test verdicts", [], () => testVerdictEntries(reviewBug)),
         loadOptional<MergeReviewView[]>("merge reviews", [], () => mergeReviewEntries(reviewBug)),
+        bug.pullRequestUrl ? loadOptional<LineFeedbackThread[]>("line feedback", [], () => loadLineFeedbackThreads(bug.id)) : Promise.resolve([]),
       ])
-    : [[] as DeliveryView[], [] as TestVerdictView[], [] as MergeReviewView[]];
+    : [[] as DeliveryView[], [] as TestVerdictView[], [] as MergeReviewView[], [] as LineFeedbackThread[]];
   // Comments on the issue itself: taken only while it is Open (lib/comment-placement.ts).
   const takesComments = !bug.isDeleted && bug.status === "open";
   const commentCount = comments.shownThreads + comments.hiddenThreads;
@@ -841,7 +845,8 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
     testVerdictList.length > 0 ||
     mergeReviewing ||
     mergeReviewList.length > 0 ||
-    pastConfirmation;
+    pastConfirmation ||
+    Boolean(bug.pullRequestUrl);
 
   // The confirmations, apart from the Conversation: above the Conversation while
   // they decide the issue, below it (as history) once it is past them.
@@ -1128,6 +1133,17 @@ export default async function BugDetailPage({ params, searchParams }: BugPagePro
                       bids={bidList}
                       collapsed={bug.status !== "open"}
                       />
+                  ) : null}
+                  {bug.pullRequestUrl ? (
+                    <div className="mb-4">
+                      <PullRequestLineFeedback
+                        bugId={bug.id}
+                        pullRequestUrl={bug.pullRequestUrl}
+                        pullRequestHeadSha={bug.pullRequestHeadSha}
+                        threads={lineFeedbackThreads}
+                        canComment={!bug.isDeleted}
+                      />
+                    </div>
                   ) : null}
                 </section>
               ) : null}
