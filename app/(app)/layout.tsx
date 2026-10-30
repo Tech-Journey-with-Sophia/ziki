@@ -99,7 +99,14 @@ export default async function AppLayout({
     }
     try {
       const agents = await loadOwnAgents({ userId: user.id, tenantId });
-      shellAgents = agents.map((agent) => ({ id: agent.id, name: agent.name, avatar: agent.avatar, level: agent.level }));
+      shellAgents = agents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        avatar: agent.avatar,
+        level: agent.level,
+        status: agent.status,
+        recent: agent.status === "working" || agent.status === "waiting" || agent.status === "idle",
+      }));
     } catch (error) {
       console.error("[layout] agents failed", error);
     }

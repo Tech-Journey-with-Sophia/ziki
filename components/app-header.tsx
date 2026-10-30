@@ -18,7 +18,7 @@ import {
 import { AGENT_LEVEL_LABELS } from "@/lib/agents/levels";
 import { isSuperAdmin, type AppRole } from "@/lib/roles";
 import { Avatar } from "@/components/avatar";
-import { AgentAvatar } from "@/components/agent-avatar";
+import { AgentStatusAvatar } from "@/components/agent-status-avatar";
 import { AccountThemeSelector } from "@/components/theme-toggle";
 import { formatPoints, pointsProgress, TARGET_POINTS } from "@/lib/points/rules";
 import { recentNotificationsAction } from "@/app/actions/notifications";
@@ -36,6 +36,8 @@ export type ShellAgent = {
   /** The owner's avatar pick; null wears the automatic robot. */
   avatar?: string | null;
   level: string;
+  status?: string;
+  recent?: boolean;
 };
 
 /** Closes a popover on outside click or Escape, returning focus to its trigger. */
@@ -327,7 +329,14 @@ function AgentsMenu({ pathname, agents }: { pathname: string | null; agents: She
               onClick={() => setOpen(false)}
               className="flex min-h-11 items-center gap-2.5 rounded-[10px] px-2.5 text-left text-zk-text"
             >
-              <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={30} />
+              <AgentStatusAvatar
+                agentId={agent.id}
+                avatar={agent.avatar}
+                name={agent.name}
+                status={agent.status}
+                recent={agent.recent}
+                size={30}
+              />
               <span className="min-w-0 flex-1 truncate font-semibold">{agent.name}</span>
               <span className="rounded-full bg-zk-info-bg px-2 py-0.5 text-[11px] font-bold text-zk-info-fg">
                 {levelLabel(agent.level)}

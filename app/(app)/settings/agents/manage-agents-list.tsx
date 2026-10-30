@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { AgentLevel } from "@prisma/client";
 import { AGENT_LEVEL_LABELS } from "@/lib/agents/levels";
 import { agentPageHref } from "@/lib/header-nav";
-import { AgentAvatar } from "@/components/agent-avatar";
+import { AgentStatusAvatar } from "@/components/agent-status-avatar";
 import { LocalTime } from "@/components/local-time";
 import { RelativeTime } from "@/components/relative-time";
 import { AgentControls } from "./agent-controls";
@@ -136,15 +136,14 @@ export function ManageAgentsList({
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="relative shrink-0">
-                    <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={56} />
-                    {!agent.revokedAt ? (
-                      <span
-                        className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-zk-surface ${
-                          agent.recent ? "bg-emerald-500" : "bg-slate-400"
-                        }`}
-                        aria-hidden
-                      />
-                    ) : null}
+                    <AgentStatusAvatar
+                      agentId={agent.id}
+                      avatar={agent.avatar}
+                      name={agent.name}
+                      recent={agent.recent}
+                      revoked={Boolean(agent.revokedAt)}
+                      size={56}
+                    />
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
                     <Link

@@ -41,12 +41,12 @@ export function agentLook(id: string): AgentLook {
   };
 }
 
-function Antenna({ kind, color }: { kind: number; color: string }) {
+function Antenna({ kind, color, sleeping = false }: { kind: number; color: string; sleeping?: boolean }) {
   if (kind === 0) {
     return (
       <>
         <line x1="24" y1="11" x2="24" y2="6" stroke={color} strokeWidth="2" strokeLinecap="round" />
-        <circle cx="24" cy="5" r="2.6" fill={GLOW} />
+        <circle cx="24" cy="5" r="2.6" fill={GLOW} opacity={sleeping ? 0.45 : 1} className={sleeping ? "" : "motion-safe:animate-pulse"} />
       </>
     );
   }
@@ -55,8 +55,8 @@ function Antenna({ kind, color }: { kind: number; color: string }) {
       <>
         <line x1="19" y1="11" x2="16.5" y2="6.5" stroke={color} strokeWidth="2" strokeLinecap="round" />
         <line x1="29" y1="11" x2="31.5" y2="6.5" stroke={color} strokeWidth="2" strokeLinecap="round" />
-        <circle cx="16" cy="5.6" r="2.1" fill={GLOW} />
-        <circle cx="32" cy="5.6" r="2.1" fill={GLOW} />
+        <circle cx="16" cy="5.6" r="2.1" fill={GLOW} opacity={sleeping ? 0.45 : 1} className={sleeping ? "" : "motion-safe:animate-pulse"} />
+        <circle cx="32" cy="5.6" r="2.1" fill={GLOW} opacity={sleeping ? 0.45 : 1} className={sleeping ? "" : "motion-safe:animate-pulse"} />
       </>
     );
   }
@@ -75,7 +75,19 @@ function Antenna({ kind, color }: { kind: number; color: string }) {
   return <rect x="20" y="7" width="8" height="4.5" rx="2.2" fill={color} />;
 }
 
-function Eyes({ kind }: { kind: number }) {
+function Eyes({ kind, sleeping = false }: { kind: number; sleeping?: boolean }) {
+  if (sleeping) {
+    return (
+      <path
+        d="M16.8 22q2.7 2.2 5.4 0M25.8 22q2.7 2.2 5.4 0"
+        fill="none"
+        stroke={GLOW}
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+    );
+  }
   if (kind === 0) {
     return (
       <>
@@ -145,12 +157,14 @@ export function AgentAvatar({
   avatar = null,
   size = 48,
   className = "",
+  sleeping = false,
 }: {
   agentId: string;
   /** The owner's pick (`Agent.avatar`); null or unknown falls back to the automatic robot. */
   avatar?: string | null;
   size?: number;
   className?: string;
+  sleeping?: boolean;
 }) {
   const look = avatarLook(avatar) ?? agentLook(agentId);
   const { bg, head } = PALETTES[look.palette]!;
@@ -161,26 +175,42 @@ export function AgentAvatar({
       height={size}
       aria-hidden="true"
       data-testid="agent-avatar"
+      data-sleeping={sleeping ? "true" : "false"}
       className={`shrink-0 rounded-full ${className}`}
     >
       <circle cx="24" cy="24" r="24" fill={bg} />
-      {/* The head tilts a little when its card is hovered. */}
-      <g className="origin-center transition-transform duration-300 group-hover:-rotate-6 motion-reduce:transition-none motion-reduce:group-hover:rotate-0">
-        <Antenna kind={look.antenna} color={head} />
+      {/* The head tilts gently when hovered, or rests slightly when sleeping */}
+      <g
+        className={`origin-center transition-transform duration-300 ${
+          sleeping
+            ? "rotate-3 group-hover:rotate-0 motion-reduce:rotate-0"
+            : "group-hover:-rotate-6 motion-reduce:group-hover:rotate-0"
+        }`}
+      >
+        <Antenna kind={look.antenna} color={head} sleeping={sleeping} />
         <rect x="9" y="17" width="4" height="9" rx="2" fill={head} />
         <rect x="35" y="17" width="4" height="9" rx="2" fill={head} />
         <rect x="11" y="11" width="26" height="23" rx="8" fill={head} />
         <rect x="14" y="14.5" width="20" height="16.5" rx="5.5" fill={SCREEN} />
-        <Eyes kind={look.eyes} />
+        <Eyes kind={look.eyes} sleeping={sleeping} />
         <Mouth kind={look.mouth} />
         {look.cheeks ? (
           <>
-            <circle cx="16.6" cy="27" r="1.4" fill="#F9A8C0" opacity="0.8" />
-            <circle cx="31.4" cy="27" r="1.4" fill="#F9A8C0" opacity="0.8" />
+            <circle cx="16.6" cy="27" r="1.4" fill="#F9A8C0" opacity={sleeping ? 0.4 : 0.8} />
+            <circle cx="31.4" cy="27" r="1.4" fill="#F9A8C0" opacity={sleeping ? 0.4 : 0.8} />
           </>
         ) : null}
         <rect x="18" y="36" width="12" height="8" rx="3" fill={head} opacity="0.9" />
       </g>
+      {sleeping ? (
+        <g
+          className="pointer-events-none select-none animate-pulse motion-reduce:animate-none"
+          style={{ animationDuration: "2.5s" }}
+        >
+          <text x="32" y="12" fill="#818CF8" fontSize="7" fontWeight="bold" fontFamily="sans-serif">z</text>
+          <text x="38" y="7" fill="#818CF8" fontSize="9" fontWeight="bold" fontFamily="sans-serif">z</text>
+        </g>
+      ) : null}
     </svg>
   );
 }

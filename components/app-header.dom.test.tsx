@@ -212,6 +212,25 @@ describe("account menu role switch", () => {
     expect(screen.getByRole("link", { name: /Scout Two/ }).getAttribute("href")).toBe("/settings/agent/Scout%20Two");
     // Each agent wears the same robot avatar it has everywhere else.
     expect(screen.getByRole("link", { name: /Pixel/ }).querySelector('[data-testid="agent-avatar"]')).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Pixel/ }).querySelector('[data-testid="agent-status-avatar"]')).toBeTruthy();
+  });
+
+  it("renders awake and sleeping avatars in the Agents menu based on activity (#693)", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderHeader({
+      agents: [
+        { id: "agent_1", name: "Pixel", level: "working", recent: true },
+        { id: "agent_2", name: "Snoozer", level: "working", recent: false },
+      ],
+    });
+    await user.click(screen.getByRole("button", { name: "Agents" }));
+    const pixelLink = screen.getByRole("link", { name: /Pixel/ });
+    const pixelAvatar = pixelLink.querySelector('[data-testid="agent-status-avatar"]');
+    expect(pixelAvatar?.getAttribute("data-status")).toBe("awake");
+
+    const snoozerLink = screen.getByRole("link", { name: /Snoozer/ });
+    const snoozerAvatar = snoozerLink.querySelector('[data-testid="agent-status-avatar"]');
+    expect(snoozerAvatar?.getAttribute("data-status")).toBe("sleeping");
   });
 
   it("sends Manage agents and Create agent to separate pages", async () => {

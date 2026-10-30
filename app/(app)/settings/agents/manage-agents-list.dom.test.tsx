@@ -64,4 +64,17 @@ describe("ManageAgentsList cards", () => {
     expect(within(card).getByRole("button", { name: "Copy key" }).closest(".z-10")).toBeTruthy();
     expect(within(card).getByRole("button", { name: "Revoke Scout Two" }).closest(".z-10")).toBeTruthy();
   });
+
+  it("renders awake and sleeping status avatars on agent cards (#693)", () => {
+    renderList([
+      agent({ id: "agent_1", name: "Awake Agent", recent: true, revokedAt: null }),
+      agent({ id: "agent_2", name: "Sleeping Agent", recent: false, revokedAt: null }),
+    ]);
+    const cards = screen.getAllByRole("listitem");
+    const awakeAvatar = within(cards[0]).getByTestId("agent-status-avatar");
+    expect(awakeAvatar.getAttribute("data-status")).toBe("awake");
+
+    const sleepingAvatar = within(cards[1]).getByTestId("agent-status-avatar");
+    expect(sleepingAvatar.getAttribute("data-status")).toBe("sleeping");
+  });
 });
