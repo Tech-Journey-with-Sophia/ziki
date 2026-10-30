@@ -86,13 +86,27 @@ describe("parseBugListFilters", () => {
     expect(parse({ tags: "design" }).where.typeId).toEqual({ in: ["t1"] });
   });
 
-  it("searches title and description, and escapes the query", () => {
+  it("searches title and description, and escapes the query (#684)", () => {
     const where = parse({ q: "100% sure" }).where;
-    expect(where.OR).toHaveLength(2);
-    // escapeSearchQuery neutralises LIKE wildcards so "%" is not a match-all.
     expect(where.OR).toEqual([
       { title: { contains: "100\\% sure", mode: "insensitive" } },
       { description: { contains: "100\\% sure", mode: "insensitive" } },
+      {
+        AND: [
+          {
+            OR: [
+              { title: { contains: "100\\%", mode: "insensitive" } },
+              { description: { contains: "100\\%", mode: "insensitive" } },
+            ],
+          },
+          {
+            OR: [
+              { title: { contains: "sure", mode: "insensitive" } },
+              { description: { contains: "sure", mode: "insensitive" } },
+            ],
+          },
+        ],
+      },
     ]);
   });
 

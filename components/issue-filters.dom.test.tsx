@@ -253,6 +253,26 @@ describe("IssueFilters live search (#671)", () => {
     // Since input is focused and user typed "login", it must NOT be reverted to "log"
     expect(input).toHaveValue("login");
   });
+
+  it("provides a clear search button to instantly reset without page refresh (#684)", async () => {
+    nav.params = new URLSearchParams("q=login");
+    render(<IssueFilters tagTypes={tagTypes} />);
+    const clearBtn = screen.getByRole("button", { name: "Clear search" });
+    expect(clearBtn).toBeInTheDocument();
+
+    fireEvent.click(clearBtn);
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("");
+    expect(nav.push).toHaveBeenCalledWith("/issues");
+  });
+
+  it("removes inbox param when searching to match tickets across the project (#684)", async () => {
+    nav.params = new URLSearchParams("inbox=input");
+    render(<IssueFilters tagTypes={tagTypes} />);
+
+    typeSearch("auth");
+    await settle();
+    expect(nav.push).toHaveBeenCalledWith("/issues?q=auth");
+  });
 });
 
 describe("IssueFilters unified Filter button popover (#762)", () => {

@@ -96,6 +96,9 @@ function hrefWithChanges(
     if (value) next.set(key, value);
     else next.delete(key);
   }
+  if (changes.q && changes.q.trim()) {
+    next.delete("inbox");
+  }
   next.delete("page");
   const qs = next.toString();
   return qs ? `/issues?${qs}` : "/issues";
@@ -356,6 +359,16 @@ export function IssueFilters({
     livePushedRef.current = false;
   }
 
+  function clearSearch() {
+    setText("");
+    skipLiveRef.current = "";
+    livePushedRef.current = false;
+    update("q", "");
+    setOpen(false);
+    setActive(-1);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   function pickSuggestion(suggestion: Suggestion) {
     if (suggestion.kind === "tag") {
       addTag(suggestion.name);
@@ -477,8 +490,19 @@ export function IssueFilters({
                   if (event.key === "ArrowDown" && suggestions.length > 0) { event.preventDefault(); setActive((i) => (i + 1) % suggestions.length); }
                   else if (event.key === "ArrowUp" && suggestions.length > 0) { event.preventDefault(); setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1)); }
                   else if (event.key === "Escape") {
-                    setOpen(false); setActive(-1); setSearchExpanded(false);
-                    if (compact) requestAnimationFrame(() => searchTriggerRef.current?.focus());
+                    if (open && suggestions.length > 0) {
+                      setOpen(false);
+                      setActive(-1);
+                    } else if (text) {
+                      clearSearch();
+                      setSearchExpanded(false);
+                      if (compact) requestAnimationFrame(() => searchTriggerRef.current?.focus());
+                    } else {
+                      setOpen(false);
+                      setActive(-1);
+                      setSearchExpanded(false);
+                      if (compact) requestAnimationFrame(() => searchTriggerRef.current?.focus());
+                    }
                   }
                   else if (event.key === "Enter") {
                     event.preventDefault();
@@ -490,6 +514,20 @@ export function IssueFilters({
                 }}
                 onBlur={() => { setIsFocused(false); setOpen(false); setActive(-1); }}
               />
+              {text ? (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  title="Clear search"
+                  className="shrink-0 p-1 text-zk-muted hover:text-zk-text focus:outline-none"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={clearSearch}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              ) : null}
               {!text && shortcutsEnabled ? (
                 <kbd className="hidden shrink-0 select-none rounded-md border border-zk-border px-1.5 py-0.5 text-[11px] font-bold text-zk-muted sm:inline-flex">/</kbd>
               ) : null}
@@ -520,7 +558,7 @@ export function IssueFilters({
           </div>
         </div>
 
-        <button type="button" onClick={applyQueryNow} disabled={isSearching} className={`inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-full border-0 bg-electric-blue-strong px-4 text-sm font-bold text-white shadow-[0_8px_20px_rgba(46,111,239,0.30)] transition-colors hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 disabled:cursor-default disabled:opacity-70 ${compact ? "issues-search-submit" : ""}`}>
+        <button type="button" onClick={applyQueryNow} aria-label="Search" className={`inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-full border-0 bg-electric-blue-strong px-4 text-sm font-bold text-white shadow-[0_8px_20px_rgba(46,111,239,0.30)] transition-colors hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 ${compact ? "issues-search-submit" : ""}`}>
           {isSearching ? (
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
           ) : (

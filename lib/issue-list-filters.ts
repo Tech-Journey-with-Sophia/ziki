@@ -116,10 +116,22 @@ export function parseBugListFilters({
   Object.assign(where, milestoneWhere(parseMilestoneFilter(params[MILESTONE_PARAM], milestones)));
 
   if (q?.trim()) {
-    const escaped = escapeSearchQuery(boundSearchTerm(q));
+    const raw = boundSearchTerm(q);
+    const escaped = escapeSearchQuery(raw);
+    const words = raw.split(/\s+/).filter(Boolean);
+    const wordConditions = words.map((w) => {
+      const escW = escapeSearchQuery(w);
+      return {
+        OR: [
+          { title: { contains: escW, mode: "insensitive" as const } },
+          { description: { contains: escW, mode: "insensitive" as const } },
+        ],
+      };
+    });
     where.OR = [
       { title: { contains: escaped, mode: "insensitive" } },
       { description: { contains: escaped, mode: "insensitive" } },
+      ...(words.length > 1 ? [{ AND: wordConditions }] : []),
     ];
   }
 

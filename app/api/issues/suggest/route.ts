@@ -15,7 +15,7 @@ import {
 } from "@/lib/issue-suggest";
 
 /**
- * Issue titles matching `?q=`, for the search box's autocomplete (#671).
+ * Issue titles matching `?q=`, for the search box's autocomplete (#671, #684).
  * Same limits as the list the suggestions come from: signed-in only, the
  * searcher's tenant and project, and no deleted issues.
  */
@@ -36,10 +36,14 @@ export async function GET(req: NextRequest) {
   const projectId = await activeProjectIdFor(prisma, tenantId);
 
   const contains = escapeSearchQuery(query);
+  const words = query.split(/\s+/).filter(Boolean);
   const matches: Prisma.BugWhereInput[] = [
     { title: { contains, mode: "insensitive" } },
+    ...(words.length > 1
+      ? [{ AND: words.map((w) => ({ title: { contains: escapeSearchQuery(w), mode: "insensitive" as const } })) }]
+      : []),
   ];
-  // "#42" and "42" should suggest issue 42 as well as any title containing it.
+  // "#42" and "42" should also suggest issue 42 as well as any title containing it.
   const asNumber = parseIssueNumberQuery(query);
   if (asNumber !== null) matches.push({ number: asNumber });
 

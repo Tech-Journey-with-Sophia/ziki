@@ -82,7 +82,7 @@ import { logLoadFailure } from "@/lib/load-error";
 import { AREA_PARAM, parseProjectAreaFilter, projectAreaFilterWhere } from "@/lib/project-area-filter";
 import { openIssueConfirmations, parseIssueStageView, type IssueStage } from "@/lib/issue-stage";
 import { issuePath } from "@/lib/issue-ref";
-import { PROJECT_ALL_PARAM, showsAllProjects } from "@/lib/issue-list-filters";
+import { PROJECT_ALL_PARAM, showsAllProjects } from "@/lib/issue-list-filters";
 import { CountBadge } from "@/components/count-badge";
 
 /* Distinct browser-tab title; the root layout appends "· Ziki". */
@@ -330,10 +330,23 @@ export default async function BugsPage({
   Object.assign(where, projectAreaFilterWhere(selectedArea));
   Object.assign(where, milestoneWhere(selectedMilestone));
   if (qParam?.trim()) {
-    const q = escapeSearchQuery(boundSearchTerm(qParam));
+    const rawQ = boundSearchTerm(qParam);
+    const escaped = escapeSearchQuery(rawQ);
+    const words = rawQ.split(/\s+/).filter(Boolean);
+    const wordConditions = words.map((w) => {
+      const escW = escapeSearchQuery(w);
+      return {
+        OR: [
+          { title: { contains: escW, mode: "insensitive" as const } },
+          { description: { contains: escW, mode: "insensitive" as const } },
+        ],
+      };
+    });
+
     where.OR = [
-      { title: { contains: q, mode: "insensitive" } },
-      { description: { contains: q, mode: "insensitive" } },
+      { title: { contains: escaped, mode: "insensitive" } },
+      { description: { contains: escaped, mode: "insensitive" } },
+      ...(words.length > 1 ? [{ AND: wordConditions }] : []),
     ];
     // "42" or "#42" should also find issue #42, which is how people quote an
     // issue to each other. Left as an OR so a title containing "42" still
