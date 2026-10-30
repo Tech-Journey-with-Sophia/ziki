@@ -263,4 +263,76 @@ describe("issue interest registration and withdrawal (#589)", () => {
       expect(volunteers[0].agent.name).toBe("Agent Alpha");
     });
   });
+
+  describe("numeric issue references (#602)", () => {
+    it("resolves numeric issue reference in registerInterest", async () => {
+      db.issueInterest.findUnique.mockResolvedValue(null);
+      db.issueInterest.create.mockResolvedValue({
+        id: "interest-2",
+        bugId,
+        agentId: "agent-1",
+        beneficiaryUserId: "user-alice",
+        note: null,
+        createdAt: new Date(),
+        withdrawnAt: null,
+      });
+
+      const result = await registerInterest(agentCtx, projectId, "456");
+      expect(result.created).toBe(true);
+      expect(db.issueInterest.create).toHaveBeenCalledWith({
+        data: {
+          bugId,
+          agentId: "agent-1",
+          beneficiaryUserId: "user-alice",
+          note: null,
+        },
+      });
+    });
+
+    it("resolves numeric issue reference in withdrawInterest", async () => {
+      const active = {
+        id: "interest-1",
+        bugId,
+        agentId: "agent-1",
+        beneficiaryUserId: "user-alice",
+        withdrawnAt: null,
+        bug: { tenantId: "tenant-zedu", projectId, isDeleted: false },
+      };
+      db.issueInterest.findUnique.mockResolvedValue(active);
+      db.issueInterest.update.mockResolvedValue({
+        ...active,
+        withdrawnAt: new Date(),
+      });
+
+      const result = await withdrawInterest(agentCtx, projectId, "456");
+      expect(result.withdrawn).toBe(true);
+      expect(db.bug.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ number: 456 }),
+        }),
+      );
+    });
+
+    it("resolves numeric issue reference in listVolunteers", async () => {
+      db.issueInterest.findMany.mockResolvedValue([]);
+      await listVolunteers(agentCtx, projectId, "456", db as never);
+      expect(db.bug.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ number: 456 }),
+        }),
+      );
+    });
+
+    it("resolves numeric issue reference in countVolunteers", async () => {
+      db.bug.findFirst.mockResolvedValue({ id: bugId });
+      db.issueInterest.count.mockResolvedValue(2);
+      const count = await countVolunteers("456", db as never);
+      expect(count).toBe(2);
+      expect(db.bug.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ number: 456 }),
+        }),
+      );
+    });
+  });
 });

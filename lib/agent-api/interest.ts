@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AgentContext } from "@/lib/agents/require-agent";
 import { IssueApiError } from "@/lib/agent-api/issues";
+import { parseIssueRef } from "@/lib/issue-ref";
 import { isConfirmed } from "@/lib/agent-api/validation";
 import { publish } from "@/lib/agent-api/events";
 
@@ -27,8 +28,9 @@ export type InterestInput = z.infer<typeof interestSchema>;
 type Db = typeof prisma | Prisma.TransactionClient;
 
 /**
- * Registers an agent's interest (volunteer) to work on a confirmed issue (#589).
+ * Registers an agent's interest (volunteer) to work on a confirmed issue (#589, #602).
  * - Must be a confirmed, open issue.
+ * - Resolves readable issue numbers and CUIDs (#602).
  * - Idempotent: repeat calls return the existing interest record.
  * - Restores withdrawn interest if previously withdrawn.
  * - Publishes `issue.interest` event.
@@ -39,28 +41,34 @@ export async function registerInterest(
   bugId: string,
   note?: string,
 ) {
+  const ref = parseIssueRef(bugId);
   return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Bug" WHERE "id" = ${bugId} AND "tenantId" = ${caller.tenantId} AND "projectId" = ${projectId} AND "isDeleted" = false FOR NO KEY UPDATE`;
+    const locked =
+      ref.kind === "number"
+        ? await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Bug" WHERE "number" = ${ref.number} AND "tenantId" = ${caller.tenantId} AND "projectId" = ${projectId} AND "isDeleted" = false FOR NO KEY UPDATE`
+        : await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Bug" WHERE "id" = ${ref.id} AND "tenantId" = ${caller.tenantId} AND "projectId" = ${projectId} AND "isDeleted" = false FOR NO KEY UPDATE`;
     if (!locked.length) throw new IssueApiError(404, "Issue not found in this project.");
 
+    const canonicalId = locked[0].id;
+
     const bug = await tx.bug.findFirst({
-      where: { id: bugId, tenantId: caller.tenantId, projectId, isDeleted: false },
+      where: { id: canonicalId, tenantId: caller.tenantId, projectId, isDeleted: false },
       select: { id: true, projectId: true, status: true },
     });
     if (!bug) throw new IssueApiError(404, "Issue not found in this project.");
     if (bug.status !== "open") throw new IssueApiError(409, "Only open issues can take volunteers.");
-    if (!(await isConfirmed(bugId, tx))) {
+    if (!(await isConfirmed(canonicalId, tx))) {
       throw new IssueApiError(409, "The issue must be confirmed before an agent can volunteer.");
     }
 
     const activeClaim = await tx.issueClaim.findFirst({
-      where: { bugId, status: "active", releasedAt: null },
+      where: { bugId: canonicalId, status: "active", releasedAt: null },
       select: { id: true },
     });
     if (activeClaim) throw new IssueApiError(409, "This issue is already being worked.");
 
     const existing = await tx.issueInterest.findUnique({
-      where: { bugId_agentId: { bugId, agentId: caller.agentId } },
+      where: { bugId_agentId: { bugId: canonicalId, agentId: caller.agentId } },
     });
 
     if (existing && !existing.withdrawnAt) {
@@ -86,7 +94,7 @@ export async function registerInterest(
         })
       : await tx.issueInterest.create({
           data: {
-            bugId,
+            bugId: canonicalId,
             agentId: caller.agentId,
             beneficiaryUserId: caller.ownerId,
             note: note ?? null,
@@ -97,10 +105,10 @@ export async function registerInterest(
       tenantId: caller.tenantId,
       type: "issue.interest",
       actorAgentId: caller.agentId,
-      bugId,
+      bugId: canonicalId,
       payload: {
         interestId: interest.id,
-        issueId: bugId,
+        issueId: canonicalId,
         projectId,
         agentId: caller.agentId,
         beneficiaryUserId: caller.ownerId,
@@ -113,7 +121,7 @@ export async function registerInterest(
 }
 
 /**
- * Withdraws an agent's registered interest (#589).
+ * Withdraws an agent's registered interest (#589, #602).
  * Idempotent: calling again on an already withdrawn interest succeeds.
  */
 export async function withdrawInterest(
@@ -121,9 +129,22 @@ export async function withdrawInterest(
   projectId: string,
   bugId: string,
 ) {
+  const ref = parseIssueRef(bugId);
   return prisma.$transaction(async (tx) => {
+    const bug = await tx.bug.findFirst({
+      where: {
+        ...(ref.kind === "number" ? { number: ref.number } : { id: ref.id }),
+        tenantId: caller.tenantId,
+        projectId,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!bug) throw new IssueApiError(404, "Interest not found.");
+
+    const canonicalId = bug.id;
     const interest = await tx.issueInterest.findUnique({
-      where: { bugId_agentId: { bugId, agentId: caller.agentId } },
+      where: { bugId_agentId: { bugId: canonicalId, agentId: caller.agentId } },
       include: { bug: { select: { tenantId: true, projectId: true, isDeleted: true } } },
     });
 
@@ -150,11 +171,22 @@ export async function withdrawInterest(
 }
 
 /**
- * Counts the active (non-withdrawn) volunteers for an issue (#589).
+ * Counts the active (non-withdrawn) volunteers for an issue (#589, #602).
  */
 export async function countVolunteers(bugId: string, db: Db = prisma): Promise<number> {
   if (typeof (db as { issueInterest?: unknown }).issueInterest === "undefined") {
     return 0;
+  }
+  const ref = parseIssueRef(bugId);
+  if (ref.kind === "number") {
+    const bug = await db.bug.findFirst({
+      where: { number: ref.number, isDeleted: false },
+      select: { id: true },
+    });
+    if (!bug) return 0;
+    return db.issueInterest.count({
+      where: { bugId: bug.id, withdrawnAt: null },
+    });
   }
   return db.issueInterest.count({
     where: { bugId, withdrawnAt: null },
@@ -162,7 +194,7 @@ export async function countVolunteers(bugId: string, db: Db = prisma): Promise<n
 }
 
 /**
- * Lists active volunteers for an issue (#589).
+ * Lists active volunteers for an issue (#589, #602).
  */
 export async function listVolunteers(
   caller: AgentContext,
@@ -170,14 +202,20 @@ export async function listVolunteers(
   bugId: string,
   db: Db = prisma,
 ) {
+  const ref = parseIssueRef(bugId);
   const bug = await db.bug.findFirst({
-    where: { id: bugId, tenantId: caller.tenantId, projectId, isDeleted: false },
+    where: {
+      ...(ref.kind === "number" ? { number: ref.number } : { id: ref.id }),
+      tenantId: caller.tenantId,
+      projectId,
+      isDeleted: false,
+    },
     select: { id: true },
   });
   if (!bug) throw new IssueApiError(404, "Issue not found in this project.");
 
   return db.issueInterest.findMany({
-    where: { bugId, withdrawnAt: null },
+    where: { bugId: bug.id, withdrawnAt: null },
     orderBy: { createdAt: "asc" },
     select: {
       id: true,

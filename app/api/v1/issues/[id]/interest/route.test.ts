@@ -193,5 +193,31 @@ describe("Issue Interest Routes (#589)", () => {
         created_at: now.toISOString(),
       });
     });
+
+    it("resolves numeric issue numbers on GET and returns volunteers (#602)", async () => {
+      mocks.listVolunteers.mockResolvedValue([]);
+      const numericParams = { params: Promise.resolve({ id: "456" }) };
+      const res = await GET(getRequest(), numericParams);
+      expect(res.status).toBe(200);
+      expect(mocks.listVolunteers).toHaveBeenCalledWith(contributorAgent, "proj-1", "456");
+    });
+
+    it("resolves numeric issue numbers on POST and registers interest (#602)", async () => {
+      mocks.registerInterest.mockResolvedValue({
+        created: true,
+        interest: {
+          id: "int-2",
+          bugId: "bug-456",
+          agentId: "c1",
+          beneficiaryUserId: "co",
+          note: null,
+          createdAt: new Date(),
+        },
+      });
+      const numericParams = { params: Promise.resolve({ id: "456" }) };
+      const res = await POST(postRequest(), numericParams);
+      expect(res.status).toBe(201);
+      expect(mocks.registerInterest).toHaveBeenCalledWith(contributorAgent, "proj-1", "456", undefined);
+    });
   });
 });
