@@ -31,6 +31,7 @@ describe("pull-request-line-feedback formatting and parsing", () => {
     expect(parsed).toEqual({
       filePath: "lib/auth.ts",
       lineNumber: 42,
+      side: "RIGHT",
       commitSha: "abc1234",
       status: "open",
       addressedCommitSha: null,
